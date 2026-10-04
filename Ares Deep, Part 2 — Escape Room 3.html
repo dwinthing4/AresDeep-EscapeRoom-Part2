@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ares Deep, Part 2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&amp;family=Barlow:ital,wght@0,400;0,600;1,400&amp;family=JetBrains+Mono:wght@400;700&amp;family=Courier+Prime:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --surround:#c8c2b8;
+  --surround-ink:#1e2428;
+  --hull:#151b1e;
+  --hull-2:#1f272b;
+  --brass:#3fbfb0;
+  --brass-hi:#7fe8dc;
+  --brass-lo:#2a5a55;
+  --amber:#f2c230;
+  --paper:#e8ece9;
+  --paper-ink:#1b2226;
+  --verdigris:#e0905a;
+  --alarm:#c0503a;
+  --serif:"Barlow", "Segoe UI", system-ui, sans-serif;
+  --sc:"Chakra Petch", "Barlow", sans-serif;
+  --tape:"Courier Prime", "Courier New", Courier, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --surround:#08090a; --surround-ink:#c9cfcc; }
+}
+:root[data-theme="dark"]{ --surround:#08090a; --surround-ink:#c9cfcc; }
+html{ height:100%; scroll-padding-top:env(safe-area-inset-top,0px); }
+*,*::before,*::after{ box-sizing:inherit; }
+body{ margin:0; height:100%; background:var(--surround); color:var(--surround-ink); font-family:var(--serif); overflow:hidden; -webkit-tap-highlight-color:transparent; }
+button{ font-family:inherit; }
+:focus-visible{ outline:2px solid var(--brass-hi); outline-offset:2px; }
+
+#app{ height:100%; display:flex; flex-direction:column; }
+
+/* ---------- HUD ---------- */
+#hud{ flex:0 0 auto; display:flex; align-items:center; gap:.6rem; padding:.45rem .8rem; background:linear-gradient(#1f272b,#12171a); border-bottom:2px solid var(--brass-lo); color:var(--paper); }
+#hud h1{ margin:0; font-family:var(--sc); font-weight:400; font-size:1.15rem; letter-spacing:.04em; color:var(--brass-hi); white-space:nowrap; }
+#hud .spacer{ flex:1; }
+#timer{ font-family:var(--tape); font-weight:700; font-size:1rem; color:var(--amber); min-width:4.5em; text-align:right; }
+.hbtn{ background:linear-gradient(#3a4a55,#25323c); color:var(--paper); border:1px solid var(--brass-lo); border-radius:3px; padding:.3rem .7rem; font-size:.95rem; cursor:pointer; }
+.hbtn:hover{ border-color:var(--brass-hi); color:#fff; }
+.hbtn .n{ font-family:var(--tape); color:var(--amber); font-size:.8rem; }
+
+/* ---------- Stage ---------- */
+#stage-wrap{ flex:1 1 auto; min-height:0; display:flex; align-items:center; justify-content:center; padding:.4rem; }
+#stage{ position:relative; aspect-ratio:16/9; width:min(100%, calc((100dvh - 9.5rem - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)) * 16 / 9)); max-height:100%; background:#05080b; overflow:hidden; border:2px solid var(--brass-lo); box-shadow:0 0 0 1px #000, 0 10px 40px rgba(0,0,0,.5); user-select:none; -webkit-user-select:none; touch-action:manipulation; }
+.layer{ position:absolute; inset:0; will-change:transform,opacity; }
+.layer svg{ width:100%; height:100%; display:block; }
+.layer.hidden{ visibility:hidden; }
+#grain{ position:absolute; inset:0; pointer-events:none; opacity:.09; mix-blend-mode:overlay; z-index:5; }
+#vignette{ position:absolute; inset:0; pointer-events:none; z-index:6; background:radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.55) 100%); }
+#flash{ position:absolute; inset:0; pointer-events:none; z-index:7; background:#cfe3ff; opacity:0; mix-blend-mode:screen; }
+#flash.on{ animation:lightning 1.1s ease-out; }
+@keyframes lightning{ 0%{opacity:0} 4%{opacity:.35} 9%{opacity:.05} 14%{opacity:.28} 40%{opacity:0} 100%{opacity:0} }
+#back{ position:absolute; left:1.2%; bottom:2%; z-index:8; display:none; background:rgba(14,20,26,.78); color:var(--paper); border:1px solid var(--brass); border-radius:20px; padding:.35rem .9rem .35rem .7rem; font-size:1rem; cursor:pointer; }
+#back:hover{ background:rgba(40,52,62,.9); }
+#caption{ position:absolute; left:50%; bottom:2.2%; transform:translateX(-50%); z-index:8; max-width:72%; text-align:center; pointer-events:none; color:#f3ead4; font-size:clamp(.8rem,1.5vw,1.1rem); font-style:italic; text-shadow:0 1px 3px #000, 0 0 12px #000; opacity:0; transition:opacity .25s; }
+#caption.on{ opacity:1; }
+#toast{ position:absolute; left:50%; top:3%; transform:translate(-50%,-10px); z-index:9; max-width:80%; background:rgba(12,18,23,.9); border:1px solid var(--brass); color:var(--paper); padding:.5rem 1rem; border-radius:3px; font-size:clamp(.82rem,1.5vw,1.05rem); line-height:1.4; opacity:0; transition:opacity .3s, transform .3s; pointer-events:none; text-align:center; }
+#toast.on{ opacity:1; transform:translate(-50%,0); }
+
+/* hotspots */
+.hot{ cursor:pointer; }
+.hot .hl{ fill:transparent; stroke:transparent; }
+.hot:hover .hl, .hot:focus .hl{ stroke:rgba(230,201,127,.55); stroke-width:3; fill:rgba(230,201,127,.06); }
+.hot:hover .glowme{ filter:url(#hoverGlow); }
+.selmode .usable .hl{ stroke:rgba(242,181,82,.5); stroke-dasharray:8 6; stroke-width:2; animation:march 1s linear infinite; }
+@keyframes march{ to{ stroke-dashoffset:-28; } }
+
+/* generic SVG animation helpers */
+.tr{ transition:transform .7s cubic-bezier(.3,.7,.2,1), opacity .5s; transform-box:fill-box; }
+.drop{ animation:rain .55s linear infinite; }
+@keyframes rain{ from{ transform:translate(0,-60px);} to{ transform:translate(-18px,140px);} }
+.flicker{ animation:flick 2.2s infinite; transform-box:fill-box; transform-origin:50% 100%; }
+@keyframes flick{ 0%,100%{transform:scale(1,1); opacity:1} 30%{transform:scale(.94,1.07); opacity:.92} 55%{transform:scale(1.04,.95)} 75%{transform:scale(.97,1.04); opacity:.96} }
+.dust{ animation:dust 9s ease-in-out infinite; }
+@keyframes dust{ 0%,100%{ transform:translate(0,0); opacity:.0 } 30%{opacity:.7} 50%{ transform:translate(14px,-20px); opacity:.5 } 80%{opacity:.6} }
+.sway{ animation:sway 2s ease-in-out infinite alternate; transform-box:view-box; }
+@keyframes sway{ from{ transform:rotate(-9deg);} to{ transform:rotate(9deg);} }
+.spin{ animation:spin 4s linear infinite; transform-box:fill-box; transform-origin:center; }
+.spin.rev{ animation-direction:reverse; }
+.spin.fast{ animation-duration:1.6s; }
+@keyframes spin{ to{ transform:rotate(360deg);} }
+.sweep{ animation:sweep 6s linear infinite; transform-box:view-box; }
+@keyframes sweep{ 0%{ opacity:0 } 15%{opacity:.9} 35%{opacity:0} 100%{opacity:0} }
+.wave{ animation:wave 5s ease-in-out infinite alternate; }
+@keyframes wave{ from{ transform:translateX(-30px);} to{ transform:translateX(30px);} }
+.shake{ animation:shake .45s; transform-box:fill-box; }
+@keyframes shake{ 0%,100%{transform:translateX(0)} 20%{transform:translateX(-9px)} 40%{transform:translateX(8px)} 60%{transform:translateX(-6px)} 80%{transform:translateX(4px)} }
+.pulse{ animation:pulse 1.6s ease-in-out infinite; }
+@keyframes pulse{ 0%,100%{opacity:.35} 50%{opacity:1} }
+
+/* ---------- Inventory ---------- */
+#inv{ flex:0 0 auto; display:flex; align-items:center; gap:.5rem; padding:.45rem .8rem; background:linear-gradient(#12171a,#1f272b); border-top:2px solid var(--brass-lo); min-height:4.6rem; overflow-x:auto; }
+#inv .lbl{ font-family:var(--sc); color:var(--brass); font-size:.95rem; margin-right:.3rem; white-space:nowrap; }
+.slot{ flex:0 0 auto; width:3.6rem; height:3.6rem; border:1px solid #3d4b55; background:radial-gradient(#2a3843,#18232b); border-radius:4px; display:flex; align-items:center; justify-content:center; cursor:pointer; position:relative; padding:0; }
+.slot svg{ width:82%; height:82%; }
+.slot:hover{ border-color:var(--brass); }
+.slot.sel{ border-color:var(--amber); box-shadow:0 0 0 2px rgba(242,181,82,.35), 0 0 14px rgba(242,181,82,.4); }
+.slot.new{ animation:newitem 1.2s ease-out; }
+@keyframes newitem{ 0%{ transform:scale(1.5); box-shadow:0 0 30px var(--amber);} 100%{ transform:scale(1);} }
+.slot.empty{ cursor:default; opacity:.4; }
+#invhelp{ color:#8d9aa3; font-size:.85rem; font-style:italic; margin-left:auto; white-space:nowrap; padding-left:.5rem; }
+
+/* ---------- Modal ---------- */
+#modal{ position:fixed; inset:0; z-index:50; display:none; align-items:center; justify-content:center; background:rgba(3,6,9,.72); backdrop-filter:blur(2px); padding:1rem; }
+#modal.on{ display:flex; }
+#mbox{ position:relative; max-width:min(1000px,96vw); max-height:92dvh; overflow:auto; background:var(--hull); border:2px solid var(--brass-lo); color:var(--paper); padding:1.3rem 1.5rem 1.2rem; border-radius:3px; box-shadow:0 20px 60px rgba(0,0,0,.6); animation:mopen .35s cubic-bezier(.2,.8,.2,1); }
+@keyframes mopen{ from{ transform:scale(.92) translateY(14px); opacity:0;} }
+#mbox h2{ margin:0 0 .6rem; font-family:var(--sc); font-weight:400; color:var(--brass-hi); font-size:1.45rem; }
+#mclose{ position:absolute; right:.6rem; top:.5rem; background:none; border:none; color:var(--paper); font-size:1.6rem; cursor:pointer; line-height:1; }
+.mtext{ line-height:1.55; font-size:1.05rem; max-width:62ch; }
+.paper{ background:linear-gradient(135deg,#efe3c6,#ddcba4); color:var(--paper-ink); padding:1.4rem 1.6rem; border-radius:2px; box-shadow:inset 0 0 40px rgba(110,80,30,.35); }
+.mbtns{ display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.9rem; }
+.mbtn{ background:linear-gradient(#5ad6c8,#2a9a8e); color:#0b1a18; border:1px solid #1d5a54; border-radius:3px; padding:.4rem 1rem; font-size:1rem; cursor:pointer; font-family:var(--serif); }
+.mbtn:hover{ filter:brightness(1.12); }
+.mbtn.ghost{ background:transparent; color:var(--paper); border-color:var(--brass-lo); }
+.mbtn:disabled{ opacity:.45; cursor:default; filter:none; }
+
+/* log book */
+.book{ display:flex; gap:0; perspective:1600px; }
+.page{ flex:1; min-height:24rem; width:min(36rem,86vw); padding:1.6rem 1.8rem; background:linear-gradient(90deg,#d9c79f,#ecdfc2 8%,#efe4c9); color:var(--paper-ink); font-size:1.08rem; line-height:1.6; box-shadow:inset 0 0 50px rgba(120,85,30,.35); border-radius:2px; position:relative; transform-origin:left center; }
+.page.turn{ animation:turn .6s ease-in-out; }
+@keyframes turn{ 0%{ transform:rotateY(0)} 50%{ transform:rotateY(-80deg); filter:brightness(.7)} 100%{ transform:rotateY(0)} }
+.page h3{ font-family:var(--sc); font-weight:400; margin:0 0 .5rem; font-size:1.2rem; }
+.page .pno{ position:absolute; bottom:.6rem; right:1rem; font-style:italic; opacity:.6; font-size:.9rem; }
+.ph{ position:relative; }
+.lit .ph::after{ content:""; position:absolute; left:50%; top:-.25em; width:5px; height:5px; margin-left:-2.5px; border-radius:50%; background:#fff6c8; box-shadow:0 0 6px 3px #ffd36b; }
+.lit .ph{ color:#7a2a08; text-shadow:0 0 8px rgba(255,190,80,.9); }
+.dimnote{ font-style:italic; color:#6b5634; font-size:.95rem; margin-top:.6rem; }
+
+/* tables */
+.ttab{ border-collapse:collapse; font-size:1rem; }
+.ttab th,.ttab td{ border:1px solid #9a835a; padding:.3rem .55rem; text-align:center; }
+.ttab th{ font-family:var(--sc); font-weight:400; background:rgba(150,110,50,.15); }
+.morsegrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(6.2rem,1fr)); gap:.25rem .9rem; font-size:1.05rem; }
+.morsegrid span b{ display:inline-block; width:1.3em; font-family:var(--sc); }
+.morsegrid span i{ font-family:var(--tape); font-style:normal; letter-spacing:.12em; }
+.tapeview{ font-family:var(--tape); font-size:1.15rem; letter-spacing:.15em; background:#f4ecd6; color:#20160c; padding:.8rem 1rem; border-radius:2px; word-break:break-all; line-height:1.9; max-height:16rem; overflow:auto; }
+
+/* journal / hints */
+.jlist{ margin:0; padding-left:1.1rem; line-height:1.55; }
+.jlist li{ margin-bottom:.35rem; }
+.hint{ border-left:3px solid var(--brass-lo); padding:.3rem .8rem; margin:.5rem 0; background:rgba(255,255,255,.03); line-height:1.5; }
+.goal{ color:var(--amber); font-style:italic; margin-bottom:.4rem; }
+
+/* overlays */
+.overlay{ position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; padding:1.2rem; background:radial-gradient(ellipse at 50% 85%, #7a3214 0%, #2a120a 45%, #08090a 100%); color:var(--paper); }
+.overlay.on{ display:flex; }
+.ovin{ max-width:44rem; text-align:left; }
+.ovin .t1{ font-family:var(--sc); font-size:clamp(2.4rem,7vw,4.6rem); line-height:.95; color:#ffd2a0; margin:0; letter-spacing:.01em; }
+.ovin .t2{ font-style:italic; color:var(--verdigris); font-size:clamp(1rem,2.2vw,1.3rem); margin:.5rem 0 1.4rem; }
+.ovin p{ line-height:1.65; font-size:clamp(1rem,1.9vw,1.15rem); max-width:60ch; }
+.ovin .mbtns{ margin-top:1.6rem; }
+#intro-beam{ position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+.stat{ display:inline-block; margin-right:2rem; }
+.stat b{ display:block; font-family:var(--tape); font-size:1.6rem; color:var(--amber); font-weight:400; }
+
+@media (max-width:640px){
+  #hud h1{ font-size:.95rem; }
+  .hbtn{ padding:.25rem .45rem; font-size:.85rem; }
+  #invhelp{ display:none; }
+  .slot{ width:3rem; height:3rem; }
+}
+.streak{animation:streak 1.4s linear infinite}@keyframes streak{from{transform:translateX(-300px)}to{transform:translateX(300px)}}
+@media (prefers-reduced-motion: reduce){
+  .drop,.dust,.wave,.sway{ animation:none; }
+}
+</style>
+<script type='text/javascript' nonce='7ceC4a1vPJMARJzlIDbWgA==' src='https://65b82d7c-058f-4349-bcc1-68a139e34b38.frame.claudeusercontent.com/sXkSUhe8XoDgVdHeHcPXj7Xp_I8QYjGWLFjGtyj8fqR4tYL7a5V8BK6r1vOQIAkUEh3y4ArskTJfVYw4qG2irnfXxF3-I8owAYHdJU0UCz19kw0C8i6PW1XvQqkmbeggEY1dSowEOYmARkkm8Y5svWs1aj692UxIskuFaT3DVz0td4IBkyrW8nvBMzQTo817kilmJkMiOEWg87mNmaBD5cKV4t8fQVpNXOtNL287AYA1ebJHPVX55fhMN_cxyUIhoKNxiD2S1KavuYnjMf9nTmQ4WKr36PQXwkDnW4aoLJHdc6XDi_GuKRtTGP1R4HYpovKiEKl0WVK5Qgegj5IJAqv6cmqhVeQI_iRAvDawZoLid1Pv8uFJr6PTcIdu_aDnHnTOa5mqlRRTTNTVBnPkn-k9gSEKqq-cceklgv3KQxscSxOpe3lR29Ju89-meASbhsi7WQFFtlrQp8d-p1r-BuKUvVj1fp7tt-gL31HTM0iwbvsdsP4H5NXqxiMLmfVw6DpTKhgLdhTce3YmzTKjdk9Sqt_4a0G5cLOP6LoIi-1Hl0mxRHbwrjr5rvkH7DhapKk6J24ny24BpYdkxKPrWcUxOQ1-ODTLpe3FJOpI01jFrlQ1BOf_Nc1rObKz_aArjUjY4OL-QJXUFTaeLaDs3-typhgYRX5_mSdcPpyryOFbtivwDFBWCUOps9jH3za_JLKbo9iENoEFsBX1x_N_wQ'></script></head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<defs>
+  <lineargradient id="gWood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7a5434"/><stop offset="1" stop-color="#4b3220"/></linearGradient>
+  <lineargradient id="gWoodTop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8d6640"/><stop offset="1" stop-color="#5f4129"/></linearGradient>
+  <lineargradient id="gWoodDark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a3020"/><stop offset="1" stop-color="#2a1b11"/></linearGradient>
+  <lineargradient id="gBrass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3dc95"/><stop offset=".45" stop-color="#c39a45"/><stop offset="1" stop-color="#6e5221"/></linearGradient>
+  <lineargradient id="gBrassH" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7a5b24"/><stop offset=".5" stop-color="#e9cc82"/><stop offset="1" stop-color="#7a5b24"/></linearGradient>
+  <radialgradient id="gBrassR" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#f6e2a2"/><stop offset=".5" stop-color="#bf9440"/><stop offset="1" stop-color="#5e4419"/></radialGradient>
+  <lineargradient id="gIron" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#565c63"/><stop offset="1" stop-color="#25292e"/></linearGradient>
+  <lineargradient id="gWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c262e"/><stop offset=".7" stop-color="#2a3640"/><stop offset="1" stop-color="#202a32"/></linearGradient>
+  <lineargradient id="gFloor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a2a1d"/><stop offset="1" stop-color="#1e150e"/></linearGradient>
+  <lineargradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a131c"/><stop offset=".7" stop-color="#1e3343"/><stop offset="1" stop-color="#2b4352"/></linearGradient>
+  <lineargradient id="gSea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f3a44"/><stop offset="1" stop-color="#081419"/></linearGradient>
+  <lineargradient id="gPaper" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#efe3c6"/><stop offset="1" stop-color="#cfbb91"/></linearGradient>
+  <lineargradient id="gGlass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#cfe8ee" stop-opacity=".35"/><stop offset=".5" stop-color="#8fb7c2" stop-opacity=".12"/><stop offset="1" stop-color="#d9f1f5" stop-opacity=".3"/></linearGradient>
+  <radialgradient id="gLampGlow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffcf7a" stop-opacity=".55"/><stop offset=".4" stop-color="#f2a03c" stop-opacity=".18"/><stop offset="1" stop-color="#f2a03c" stop-opacity="0"/></radialGradient>
+  <radialgradient id="gFlame" cx=".5" cy=".7" r=".6"><stop offset="0" stop-color="#fff9dc"/><stop offset=".45" stop-color="#ffc24a"/><stop offset="1" stop-color="#e5651c" stop-opacity="0"/></radialGradient>
+  <radialgradient id="gBeamDot" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fffbe6"/><stop offset=".3" stop-color="#ffd877" stop-opacity=".9"/><stop offset="1" stop-color="#ffb84a" stop-opacity="0"/></radialGradient>
+  <lineargradient id="gBeam" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff6cf" stop-opacity=".75"/><stop offset="1" stop-color="#fff6cf" stop-opacity="0"/></linearGradient>
+  <radialgradient id="gHole" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#000" stop-opacity=".8"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+  <pattern id="pStone" width="140" height="70" patternunits="userSpaceOnUse">
+    <rect width="140" height="70" fill="none"/>
+    <path d="M0 0H140M0 35H140M30 0V35M100 0V35M65 35V70M135 35V70" stroke="#0d1419" stroke-width="2" opacity=".55"/>
+    <path d="M2 2H138M2 37H138" stroke="#4a5a66" stroke-width="1" opacity=".25"/>
+  </pattern>
+  <pattern id="pGrain" width="300" height="40" patternunits="userSpaceOnUse">
+    <path d="M0 8 C60 5 120 12 180 8 S270 5 300 9 M0 22 C70 25 130 18 200 23 S280 26 300 21 M0 33 C50 31 110 36 170 32 S260 30 300 34" stroke="#2a1a0e" stroke-width="1.3" fill="none" opacity=".35"/>
+  </pattern>
+  <filter id="hoverGlow" x="-20%" y="-20%" width="140%" height="140%"><fedropshadow dx="0" dy="0" stddeviation="6" flood-color="#e6c97f" flood-opacity=".55"/></filter>
+  <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><fegaussianblur stddeviation="8"/></filter>
+  <filter id="soft2" x="-30%" y="-30%" width="160%" height="160%"><fegaussianblur stddeviation="3"/></filter>
+  <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><fedropshadow dx="0" dy="8" stddeviation="8" flood-color="#000" flood-opacity=".55"/></filter>
+  <filter id="carve" x="-10%" y="-10%" width="120%" height="120%"><fedropshadow dx="-1.5" dy="-1.5" stddeviation=".6" flood-color="#000" flood-opacity=".7"/><fedropshadow dx="1.5" dy="1.5" stddeviation=".6" flood-color="#d9b07a" flood-opacity=".35"/></filter>
+</defs>
+</svg>
+
+<div id="app">
+  <header id="hud">
+    <h1>Ares Deep · Part 2</h1>
+    <span class="spacer"></span>
+    <span id="timer" title="Time elapsed">00:00</span>
+    <button class="hbtn" id="bHint">Hints <span class="n" id="hintN">0</span></button>
+    <button class="hbtn" id="bJournal">Journal</button>
+    <button class="hbtn" id="bManual">HALE manual</button>
+    <button class="hbtn" id="bSound" aria-pressed="true">Sound on</button>
+    <button class="hbtn" id="bMenu">Menu</button>
+  </header>
+  <main id="stage-wrap">
+    <div id="stage">
+      <div class="layer" id="L0"></div>
+      <div class="layer hidden" id="L1"></div>
+      <canvas id="grain"></canvas>
+      <div id="vignette"></div>
+      <div id="flash"></div>
+      <button id="back">&#8592; Step back</button>
+      <div id="caption"></div>
+      <div id="toast"></div>
+    </div>
+  </main>
+  <footer id="inv"><span class="lbl">Satchel</span><div id="slots" style="display:flex;gap:.5rem"></div><span id="invhelp">Click an item to select it, then click where to use it. Double-click to examine.</span></footer>
+</div>
+
+<div id="modal" role="dialog" aria-modal="true"><div id="mbox"><button id="mclose" aria-label="Close">&times;</button><div id="mcontent"></div></div></div>
+
+<div class="overlay on" id="intro">
+  <div class="ovin" style="position:relative">
+    <h2 class="t1">Ares Deep</h2>
+    <div class="t2">Part 2 of 2 · The propellant bay</div>
+    <p>The reactor is stable, the oxygen is made and the fuel cask is in place. The ascent vehicle AV-2 stands on the pad outside, empty.</p>
+    <p>Now you size the propellant load, make methane and oxygen out of the Martian air, pump it aboard without boiling it, make sure the pad can hold the weight, and fly the ascent yourself to meet the orbiter.</p>
+    <p>New numbers every game, as before. The HALE manual has a new set of chapters.</p>
+    <div class="mbtns"><button class="mbtn" id="bBegin">Begin</button><button class="mbtn ghost" id="bContinue" style="display:none">Continue saved game</button></div>
+  </div>
+</div>
+<div class="overlay" id="win">
+  <div class="ovin">
+    <h2 class="t1">Docked</h2>
+    <div class="t2">You escaped Ares Deep</div>
+    <p id="winText"></p>
+    <div id="winStats" style="margin-top:1.2rem"></div>
+    <div class="mbtns"><button class="mbtn" id="bAgain">New game, new numbers</button><button class="mbtn ghost" id="bStay">Look around</button></div>
+  </div>
+</div>
+
+<script>
+(()=>{
+"use strict";
+const $=s=>document.querySelector(s);
+const SAVE='ares-deep-2-v1';
+const VW=1600, VH=900;
+
+/* ============================== STATE ============================== */
+const fresh=()=>({scene:'pbay',t:0,hints:0,tier:{},inv:[],taken:{},f:{},journal:[],mistakes:0,origins:{},sel:null,seed:0,v:{}});
+let S=fresh();
+let saveT=null;
+function save(){ clearTimeout(saveT); saveT=setTimeout(()=>{ try{ localStorage.setItem(SAVE,JSON.stringify(S)); }catch(e){} },150); }
+function load(){ try{ const r=localStorage.getItem(SAVE); if(r){ const o=JSON.parse(r); if(o&&o.t!==undefined) return Object.assign(fresh(),o); } }catch(e){} return null; }
+function wipe(){ try{ localStorage.removeItem(SAVE); }catch(e){} }
+
+/* ============================== AUDIO ============================== */
+const A={ctx:null,on:true};
+function audioInit(){
+  if(A.ctx) return;
+  try{ A.ctx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
+  const c=A.ctx;
+  A.master=c.createGain(); A.master.gain.value=A.on?0.85:0; A.master.connect(c.destination);
+  const len=c.sampleRate*2, b=c.createBuffer(1,len,c.sampleRate), d=b.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=Math.random()*2-1;
+  A.noise=b;
+  // rain bed
+  const r=c.createBufferSource(); r.buffer=b; r.loop=true;
+  const rf=c.createBiquadFilter(); rf.type='bandpass'; rf.frequency.value=2600; rf.Q.value=.35;
+  const rg=c.createGain(); rg.gain.value=.045; r.connect(rf).connect(rg).connect(A.master); r.start();
+  // wind with slow swell
+  const w=c.createBufferSource(); w.buffer=b; w.loop=true; w.playbackRate.value=.5;
+  const wf=c.createBiquadFilter(); wf.type='lowpass'; wf.frequency.value=380;
+  const wg=c.createGain(); wg.gain.value=.07;
+  const lfo=c.createOscillator(); lfo.frequency.value=.07; const lg=c.createGain(); lg.gain.value=.05; lfo.connect(lg).connect(wg.gain); lfo.start();
+  w.connect(wf).connect(wg).connect(A.master); w.start();
+  // morse tone
+  const o=c.createOscillator(); o.type='sine'; o.frequency.value=640;
+  const og=c.createGain(); og.gain.value=0; o.connect(og).connect(A.master); o.start();
+  A.toneG=og; A.toneO=o;
+}
+function nz({dur=.15,freq=1200,q=1,type='bandpass',gain=.4,attack=.004,delay=0}={}){
+  if(!A.ctx) return; const c=A.ctx, t=c.currentTime+delay;
+  const s=c.createBufferSource(); s.buffer=A.noise; s.playbackRate.value=.6+Math.random()*.8;
+  const f=c.createBiquadFilter(); f.type=type; f.frequency.value=freq; f.Q.value=q;
+  const g=c.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(gain,t+attack); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  s.connect(f).connect(g).connect(A.master); s.start(t,Math.random()); s.stop(t+dur+.05);
+}
+function tn(freq,dur,type='sine',gain=.15,slide,delay=0){
+  if(!A.ctx) return; const c=A.ctx, t=c.currentTime+delay;
+  const o=c.createOscillator(); o.type=type; o.frequency.setValueAtTime(freq,t); if(slide) o.frequency.exponentialRampToValueAtTime(slide,t+dur);
+  const g=c.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(gain,t+.008); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g).connect(A.master); o.start(t); o.stop(t+dur+.05);
+}
+const sfx={
+  click(){ nz({dur:.05,freq:3200,q:2,gain:.35}); tn(2200,.03,'square',.02); },
+  tick(){ nz({dur:.03,freq:4200,q:5,gain:.22}); },
+  clunk(){ nz({dur:.3,freq:260,q:1,type:'lowpass',gain:.8}); tn(95,.3,'sine',.35,48); },
+  slide(){ nz({dur:.55,freq:650,q:.8,gain:.28,attack:.09}); },
+  creak(){ tn(150,.9,'sawtooth',.045,85); nz({dur:.8,freq:420,q:4,gain:.14,attack:.15}); },
+  unlock(){ sfx.click(); nz({dur:.14,freq:2300,q:3,gain:.35,delay:.12}); tn(1320,.3,'triangle',.07,null,.12); },
+  rattle(){ for(let i=0;i<5;i++) nz({dur:.05,freq:1700+i*230,q:4,gain:.28,delay:i*.055}); },
+  buzz(){ tn(105,.32,'square',.06); },
+  pick(){ tn(660,.14,'triangle',.08,990); },
+  page(){ nz({dur:.32,freq:4200,q:.5,gain:.16,attack:.06}); },
+  match(){ nz({dur:.25,freq:3400,q:.3,gain:.4,attack:.005}); nz({dur:1.2,freq:700,q:.5,gain:.09,attack:.25,delay:.15}); },
+  thunder(){ nz({dur:3.6,freq:130,q:.4,type:'lowpass',gain:1,attack:.08}); nz({dur:1.4,freq:300,q:.6,type:'lowpass',gain:.5,attack:.02,delay:.2}); },
+  chime(){ [0,1].forEach(i=>{ tn(523,2.2,'sine',.12,null,i*.7); tn(1046,1.6,'sine',.04,null,i*.7); tn(1568,1.1,'sine',.02,null,i*.7); }); },
+  success(){ [523,659,784,1046].forEach((f,i)=>tn(f,1,'triangle',.09,null,i*.11)); },
+  whoosh(){ nz({dur:.55,freq:900,q:.6,gain:.13,attack:.2}); },
+  gears(){ for(let i=0;i<14;i++) nz({dur:.04,freq:2600+(i%3)*400,q:6,gain:.2,delay:i*.09}); sfx.clunk(); },
+  splash(){ nz({dur:.6,freq:1600,q:.4,gain:.15,attack:.02}); },
+  hum(on){ if(!A.ctx) return; },
+};
+function toneOn(f=640){ if(!A.ctx) return; A.toneO.frequency.setValueAtTime(f,A.ctx.currentTime); A.toneG.gain.setTargetAtTime(.16,A.ctx.currentTime,.004); }
+function toneOff(){ if(!A.ctx) return; A.toneG.gain.setTargetAtTime(0,A.ctx.currentTime,.004); }
+function setSound(on){ A.on=on; if(A.master) A.master.gain.setTargetAtTime(on?.85:0,A.ctx.currentTime,.05); $('#bSound').textContent=on?'Sound on':'Sound off'; $('#bSound').setAttribute('aria-pressed',on); }
+
+/* ============================== UI HELPERS ============================== */
+let toastT=null;
+function say(msg,ms=3400){ const t=$('#toast'); t.innerHTML=msg; t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'),ms); }
+function cap(txt){ const c=$('#caption'); if(txt){ c.textContent=txt; c.classList.add('on'); } else c.classList.remove('on'); }
+function note(txt){ if(!S.journal.includes(txt)){ S.journal.push(txt); save(); const b=$('#bJournal'); b.style.borderColor='var(--amber)'; setTimeout(()=>b.style.borderColor='',2500); } }
+function fmtT(s){ s=Math.floor(s); const h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60; return (h?h+':':'')+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0'); }
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ============================== ITEMS ============================== */
+const ITEMS={};
+function give(id){
+  if(S.inv.includes(id)) return;
+  S.inv.push(id); S.taken[id]=true; sfx.pick(); renderInv(id); say(`Added to satchel: <b>${ITEMS[id].name}</b>`); save();
+}
+function renderInv(newId){
+  const box=$('#slots'); box.innerHTML='';
+  const n=Math.max(7,S.inv.length);
+  for(let i=0;i<n;i++){
+    const id=S.inv[i]; const b=document.createElement('button');
+    b.className='slot'+(id?'':' empty')+(id&&S.sel===id?' sel':'')+(id&&id===newId?' new':'');
+    if(id){ b.innerHTML=ITEMS[id].icon; b.title=ITEMS[id].name; b.setAttribute('aria-label',ITEMS[id].name);
+      b.onclick=()=>{ audioInit(); if(S.sel===id){ deselect(); examine(id); } else { S.sel=id; renderInv(); applySel(); say(`Holding the <b>${ITEMS[id].name}</b>. Click something to use it on, or click it again to examine.`,2800); } };
+      b.ondblclick=()=>{ deselect(); examine(id); };
+    } else { b.disabled=true; b.setAttribute('aria-hidden','true'); }
+    box.appendChild(b);
+  }
+}
+function deselect(){ S.sel=null; renderInv(); applySel(); }
+function applySel(){ document.querySelectorAll('.layer').forEach(l=>{ l.classList.toggle('selmode',!!S.sel); l.querySelectorAll('[data-use]').forEach(h=>h.classList.toggle('usable',!!S.sel && h.dataset.use.split(' ').includes(S.sel))); }); }
+
+/* ============================== MODAL ============================== */
+let onModalClose=null;
+function modal(title,html,mount,onClose){
+  $('#mcontent').innerHTML=(title?`<h2>${title}</h2>`:'')+html;
+  $('#modal').classList.add('on'); onModalClose=onClose||null;
+  if(mount) mount($('#mcontent'));
+  setTimeout(()=>$('#mclose').focus(),30);
+}
+function closeModal(){ $('#modal').classList.remove('on'); $('#mcontent').innerHTML=''; if(onModalClose){ const f=onModalClose; onModalClose=null; f(); } }
+$('#mclose').onclick=closeModal;
+$('#modal').addEventListener('click',e=>{ if(e.target.id==='modal') closeModal(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($('#modal').classList.contains('on')) closeModal(); else if(S.sel) deselect(); else if(scenes[S.scene]&&scenes[S.scene].parent) goBack(); } });
+
+/* ============================== SCENE ENGINE ============================== */
+const scenes={};
+let cur='L0', busy=false;
+const L=id=>document.getElementById(id);
+function chain(id){ const a=[]; let s=id; while(s){ a.push(s); s=scenes[s]&&scenes[s].parent; } return a; }
+function mount(el,id){
+  const sc=scenes[id];
+  el.innerHTML=`<svg viewBox="0 0 ${VW} ${VH}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(sc.title)}">${sc.render()}</svg>`;
+  el.dataset.scene=id;
+  el.querySelectorAll('[data-go],[data-act]').forEach(h=>{ h.classList.add('hot'); h.setAttribute('tabindex','0'); h.setAttribute('role','button'); if(h.dataset.cap) h.setAttribute('aria-label',h.dataset.cap);
+    if(!h.querySelector('.hl')){ try{ const bb=h.getBBox(); const r=document.createElementNS('http://www.w3.org/2000/svg','rect'); r.setAttribute('class','hl'); r.setAttribute('x',bb.x-6); r.setAttribute('y',bb.y-6); r.setAttribute('width',bb.width+12); r.setAttribute('height',bb.height+12); r.setAttribute('rx',8); h.appendChild(r);}catch(e){} } });
+  if(sc.mount) sc.mount(el);
+  if(sc.update) sc.update(el);
+  updateShips(el); applySel();
+}
+function stageOriginOf(h,el){
+  try{ const bb=h.getBBox(); const svg=el.querySelector('svg'); return {x:(bb.x+bb.width/2)/VW*100,y:(bb.y+bb.height/2)/VH*100}; }catch(e){ return {x:50,y:50}; }
+}
+function go(id,origin){
+  if(busy||id===S.scene||!scenes[id]) return;
+  busy=true; cap(null);
+  const fromId=S.scene, from=L(cur), nextL=cur==='L0'?'L1':'L0', to=L(nextL);
+  const deeper=!chain(fromId).includes(id);
+  if(scenes[fromId].leave) scenes[fromId].leave();
+  if(deeper){ S.origins[id]=origin||S.origins[id]||{x:50,y:50}; }
+  const o=deeper?S.origins[id]:(S.origins[fromId]||{x:50,y:50});
+  S.scene=id; save();
+  mount(to,id); to.classList.remove('hidden');
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const D=reduce?250:700;
+  sfx.whoosh();
+  let a1,a2;
+  if(deeper){
+    from.style.transformOrigin=`${o.x}% ${o.y}%`;
+    a1=from.animate([{transform:'scale(1)',opacity:1},{transform:reduce?'scale(1)':'scale(2.6)',opacity:0}],{duration:D,easing:'cubic-bezier(.55,0,.8,.3)',fill:'forwards'});
+    to.style.transformOrigin=`${o.x}% ${o.y}%`;
+    a2=to.animate([{transform:reduce?'scale(1)':'scale(.55)',opacity:0},{transform:'scale(1)',opacity:1}],{duration:D,delay:D*.38,easing:'cubic-bezier(.2,.7,.2,1)',fill:'backwards'});
+  } else {
+    from.style.transformOrigin=`${o.x}% ${o.y}%`;
+    a1=from.animate([{transform:'scale(1)',opacity:1},{transform:reduce?'scale(1)':'scale(.5)',opacity:0}],{duration:D*.8,easing:'cubic-bezier(.5,0,.8,.4)',fill:'forwards'});
+    to.style.transformOrigin=`${o.x}% ${o.y}%`;
+    a2=to.animate([{transform:reduce?'scale(1)':'scale(2.4)',opacity:0},{transform:'scale(1)',opacity:1}],{duration:D,delay:D*.2,easing:'cubic-bezier(.2,.7,.2,1)',fill:'backwards'});
+  }
+  to.style.zIndex=2; from.style.zIndex=1;
+  let done=false;
+  const finish=()=>{ if(done) return; done=true; try{a1.cancel();}catch(e){} from.classList.add('hidden'); from.innerHTML=''; from.style.zIndex=''; cur=nextL; busy=false; $('#back').style.display=scenes[id].parent?'block':'none'; if(scenes[id].enter) scenes[id].enter(to); };
+  a2.onfinish=finish; setTimeout(finish,D*1.4+120);
+}
+function goBack(){ const p=scenes[S.scene].parent; if(p) go(p); }
+$('#back').onclick=()=>{ audioInit(); goBack(); };
+function curEl(){ return L(cur); }
+function refresh(){ const sc=scenes[S.scene]; if(sc&&sc.update) sc.update(curEl()); applySel(); save(); }
+
+// delegated interaction
+['L0','L1'].forEach(lid=>{
+  const el=L(lid);
+  el.addEventListener('click',e=>{
+    audioInit();
+    if(busy||el.dataset.scene!==S.scene) return;
+    const h=e.target.closest('[data-go],[data-act]'); if(!h) return;
+    const sc=scenes[S.scene];
+    if(h.dataset.drag==='1' && el._dragged){ el._dragged=false; return; }
+    if(S.sel){
+      const uses=(h.dataset.use||'').split(' ');
+      if(uses.includes(S.sel)){ const it=S.sel; deselect(); sc.use(it,h.dataset.act||h.dataset.go,h,el); return; }
+      if(h.dataset.act){ say(`The ${ITEMS[S.sel].name.toLowerCase()} is no use there.`); deselect(); return; }
+    }
+    if(h.dataset.go){ if(h.dataset.lock && !sc.canGo(h.dataset.go,h)) return; go(h.dataset.go,stageOriginOf(h,el)); return; }
+    if(h.dataset.act && sc.act) sc.act(h.dataset.act,h,el,e);
+  });
+  el.addEventListener('keydown',e=>{ if(S.scene==='console'&&e.key==='Enter') return; if((e.key==='Enter'||e.key===' ') && e.target.closest('[data-go],[data-act]')){ e.preventDefault(); e.target.closest('[data-go],[data-act]').dispatchEvent(new MouseEvent('click',{bubbles:true})); } });
+  el.addEventListener('mouseover',e=>{ const h=e.target.closest('[data-cap]'); if(h&&!busy) cap(h.dataset.cap); });
+  el.addEventListener('mouseout',e=>{ const h=e.target.closest('[data-cap]'); if(h&&!h.contains(e.relatedTarget)) cap(null); });
+});
+
+/* ============================== SHARED ART ============================== */
+function rainDrops(x,y,w,h,n,op=.45){
+  let s=`<g opacity="${op}" stroke="#a9c6d6" stroke-width="1.4" stroke-linecap="round">`;
+  for(let i=0;i<n;i++){ const px=x+Math.random()*(w+40), py=y+Math.random()*h*.8, l=rnd(10,22);
+    s+=`<line class="drop" x1="${px.toFixed(0)}" y1="${py.toFixed(0)}" x2="${(px-3).toFixed(0)}" y2="${(py+l).toFixed(0)}" style="animation-delay:${(-Math.random()).toFixed(2)}s;animation-duration:${rnd(.45,.7).toFixed(2)}s"/>`; }
+  return s+'</g>';
+}
+function shipG(){
+  return `<g class="ship-inner">
+    <path d="M-60 0 L60 0 L48 14 L-50 14Z" fill="#05090c"/>
+    <path d="M-20 0 V-70 M18 0 V-60" stroke="#05090c" stroke-width="3"/>
+    <path d="M-34 -6 H30 V-16 H-34Z" fill="#070c10"/>
+    <circle cx="-20" cy="-72" r="16" fill="url(#gLampGlow)" class="pulse"/><circle cx="-20" cy="-72" r="2.6" fill="#fff6dc"/>
+    <circle cx="-40" cy="-6" r="12" fill="#ff5a3c" opacity=".25"/><circle cx="-40" cy="-6" r="2.4" fill="#ff7a5c"/>
+    <circle cx="40" cy="-6" r="2" fill="#7dff9a" opacity=".55"/>
+    <rect x="-10" y="-12" width="5" height="3" fill="#ffd27a" opacity=".7"/><rect x="2" y="-12" width="5" height="3" fill="#ffd27a" opacity=".5"/>
+  </g>`;
+}
+function beamWedges(cx,cy,len,spread){
+  const d=`M${cx} ${cy} L${cx+len} ${cy-spread} L${cx+len} ${cy+spread}Z`;
+  return `<path class="sweep" d="${d}" fill="url(#gBeam)"/><path class="sweep" style="animation-delay:-3s" d="${d}" fill="url(#gBeam)" transform="translate(${2*cx} 0) scale(-1 1)"/>`;
+}
+// Sea view inside an arbitrary clip shape. box = sea area; hz = horizon y
+function seaView(id,x,y,w,h,clipD,opts={}){
+  const hz=y+h*(opts.hz||.55);
+  let clouds=''; for(let i=0;i<7;i++){ clouds+=`<ellipse cx="${x+rnd(0,w)}" cy="${y+rnd(0,(hz-y)*.7)}" rx="${rnd(w*.12,w*.3)}" ry="${rnd(18,46)}" fill="#33495a" opacity="${rnd(.25,.5).toFixed(2)}" filter="url(#soft)"/>`; }
+  let waves=''; for(let i=0;i<9;i++){ const yy=hz+ (y+h-hz)*(i/9)+6; waves+=`<path class="wave" style="animation-delay:${-i*.7}s;animation-duration:${4+i%3}s" d="M${x-60} ${yy} q ${w/16} -${4+i} ${w/8} 0 t ${w/8} 0 t ${w/8} 0 t ${w/8} 0 t ${w/8} 0 t ${w/8} 0 t ${w/8} 0 t ${w/8} 0 t ${w/8} 0" stroke="#5f8796" stroke-width="${1+i*.25}" fill="none" opacity="${.15+i*.04}"/>`; }
+  const rx=x+w*.18, ry=hz+(y+h-hz)*.45;
+  const rocks=`<g><path d="M${rx-w*.14} ${ry+30} L${rx-w*.09} ${ry-12} L${rx-w*.05} ${ry+4} L${rx} ${ry-26} L${rx+w*.05} ${ry} L${rx+w*.1} ${ry-8} L${rx+w*.16} ${ry+30}Z" fill="#05090b"/>
+    <ellipse cx="${rx}" cy="${ry+24}" rx="${w*.17}" ry="9" fill="#d9eef5" opacity=".35" class="pulse" filter="url(#soft2)"/>
+    <ellipse cx="${rx+w*.06}" cy="${ry+10}" rx="${w*.05}" ry="5" fill="#e6f5fa" opacity=".4" class="pulse" style="animation-delay:-.8s" filter="url(#soft2)"/></g>`;
+  const beam=(S.f.beam&&!opts.noBeam)?`<g opacity=".4" pointer-events="none">${beamWedges(x+w*.5,hz-h*.18,w*.9,h*.12)}</g>`:'';
+  return `<clipPath id="cp-${id}"><path d="${clipD}"/></clipPath>
+  <g clip-path="url(#cp-${id})">
+    <rect x="${x}" y="${y}" width="${w}" height="${hz-y+2}" fill="url(#gSky)"/>
+    ${clouds}
+    <rect x="${x}" y="${hz}" width="${w}" height="${y+h-hz}" fill="url(#gSea)"/>
+    ${waves}
+    <g class="ship" data-box="${x},${hz},${w},${y+h-hz}" data-s="${opts.ss||1}">${shipG()}</g>
+    ${rocks}
+    ${beam}
+    ${rainDrops(x,y,w,h,opts.drops||Math.round(w*h/9000))}
+    <rect class="winflash" x="${x}" y="${y}" width="${w}" height="${h}" fill="#dfeeff" opacity="0"/>
+  </g>`;
+}
+function shipP(){ return Math.min(1,S.t/(75*60)); }
+function updateShips(root){
+  (root||document).querySelectorAll('.ship').forEach(g=>{
+    const [x,hz,w,h]=g.dataset.box.split(',').map(Number), ss=+g.dataset.s;
+    let p=shipP(), X, Y, sc;
+    if(S.f.won){ X=x+w*1.05; Y=hz+h*.08; sc=.35*ss; g.style.transition='transform 6s ease-in'; }
+    else { X=x+w*(.92-.6*p); Y=hz+h*(.06+.3*p); sc=(.32+.75*p)*ss*(w/1000); }
+    if(!S.f.won) sc=Math.max(sc,.12);
+    g.setAttribute('transform',`translate(${X.toFixed(1)} ${Y.toFixed(1)}) scale(${sc.toFixed(3)})`);
+  });
+}
+function lightning(){
+  const el=curEl(); const f=$('#flash');
+  f.classList.remove('on'); void f.offsetWidth; f.classList.add('on');
+  el.querySelectorAll('.winflash').forEach(r=>{ r.animate([{opacity:0},{opacity:.6},{opacity:.05},{opacity:.45},{opacity:0}],{duration:900,easing:'ease-out'}); });
+  setTimeout(()=>sfx.thunder(),rnd(500,1800));
+}
+function scheduleLightning(){ setTimeout(()=>{ if(S.started && !document.hidden) lightning(); scheduleLightning(); },rnd(14000,32000)); }
+
+// brass screw
+const screw=(x,y,r=6)=>`<circle cx="${x}" cy="${y}" r="${r}" fill="url(#gBrassR)" stroke="#4a3510" stroke-width="1"/><line x1="${x-r*.6}" y1="${y}" x2="${x+r*.6}" y2="${y}" stroke="#4a3510" stroke-width="1.4"/>`;
+
+
+/* ============================== ROOM 3 DEFS ============================== */
+document.querySelector('svg defs').insertAdjacentHTML('beforeend',`
+  <linearGradient id="gPan" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c9cfcc"/><stop offset="1" stop-color="#9aa29f"/></linearGradient>
+  <linearGradient id="gPanD" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a5358"/><stop offset="1" stop-color="#2a3034"/></linearGradient>
+  <linearGradient id="gRib" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7d8683"/><stop offset=".5" stop-color="#dfe4e1"/><stop offset="1" stop-color="#7d8683"/></linearGradient>
+  <linearGradient id="gHall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b3236"/><stop offset="1" stop-color="#3b4448"/></linearGradient>
+  <radialGradient id="gMars" cx=".4" cy=".35" r=".8"><stop offset="0" stop-color="#f0a060"/><stop offset=".55" stop-color="#b8582c"/><stop offset="1" stop-color="#5a2412"/></radialGradient>
+  <radialGradient id="gTeal" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#3fe0d0" stop-opacity=".55"/><stop offset="1" stop-color="#3fe0d0" stop-opacity="0"/></radialGradient>
+  <radialGradient id="gScreen" cx=".5" cy=".5" r=".75"><stop offset="0" stop-color="#0e2a2c"/><stop offset="1" stop-color="#050c0d"/></radialGradient>
+  <radialGradient id="gHot" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ff7a2a" stop-opacity=".6"/><stop offset="1" stop-color="#ff7a2a" stop-opacity="0"/></radialGradient>
+  <linearGradient id="gCyl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a4248"/><stop offset=".3" stop-color="#c8d0d4"/><stop offset=".6" stop-color="#7a848a"/><stop offset="1" stop-color="#2a3034"/></linearGradient>
+  <linearGradient id="gCylV" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3a4248"/><stop offset=".3" stop-color="#c8d0d4"/><stop offset=".6" stop-color="#7a848a"/><stop offset="1" stop-color="#2a3034"/></linearGradient>
+  <pattern id="pHaz" width="40" height="40" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="40" height="40" fill="#f2c230"/><rect width="20" height="40" fill="#1b1d1f"/></pattern>
+  <pattern id="pGrate" width="30" height="30" patternUnits="userSpaceOnUse"><rect width="30" height="30" fill="#22282b"/><path d="M0 15H30M15 0V30" stroke="#3a4448" stroke-width="5"/></pattern>
+  <pattern id="pBolt" width="80" height="80" patternUnits="userSpaceOnUse"><circle cx="8" cy="8" r="3" fill="#7d8683"/></pattern>
+  <filter id="glowT" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`);
+
+function mulberry(a){ return ()=>{ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+/* ============================== HELPERS ============================== */
+const MONO='JetBrains Mono, Consolas, monospace', UI='Chakra Petch, Barlow, sans-serif';
+const PLATES={};
+function plate(id,x,y,w,title,lines,fs=19){
+  PLATES[id]={title,lines}; const h=46+lines.length*(fs+7);
+  return `<g data-act="plate-${id}" data-cap="${title} — click to read"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="#d8ddda" stroke="#5a6266" stroke-width="3"/>${screw(x+12,y+12,4)}${screw(x+w-12,y+12,4)}<text x="${x+18}" y="${y+34}" font-family="${UI}" font-weight="700" font-size="${fs+1}" fill="#1b2226">${title}</text>${lines.map((l,i)=>`<text x="${x+18}" y="${y+62+i*(fs+7)}" font-family="${MONO}" font-size="${fs}" fill="#22292d">${l}</text>`).join('')}</g>`;
+}
+function openPlate(id){ const p=PLATES[id]; if(!p) return; modal(p.title,`<div class="paper" style="font-family:var(--tape);font-size:1.15rem;line-height:1.7">${p.lines.map(esc).join('<br>')}</div>`); note(`${p.title}: ${p.lines.join('; ')}`); }
+function hale(el,txt){ const n=el.querySelector('#hale'); if(n) n.textContent=txt; }
+const bayPowered=()=>!!S.f.reactor;
+function lightOverlay(){ return `<rect width="1600" height="900" fill="#2a0e00" opacity="${S.f.bat?0:.5}" style="mix-blend-mode:multiply" pointer-events="none"/>`; }
+
+/* ============================== SHARED HELPERS (room 3) ============================== */
+function gearPath(cx,cy,r,n){ let d=''; const t=Math.max(3,r*.14); for(let i=0;i<n*2;i++){ const a0=i*Math.PI/n, a1=(i+1)*Math.PI/n, R=i%2?r-t:r+t*.4; const p=(a,rr)=>`${(cx+rr*Math.cos(a)).toFixed(1)} ${(cy+rr*Math.sin(a)).toFixed(1)}`; d+=(i?'L':'M')+p(a0+.04,R)+' L'+p(a1-.04,R)+' '; } return d+'Z'; }
+function ledText(x,y,txt,size,col,id=''){ return `<text ${id?`id="${id}"`:''} x="${x}" y="${y}" text-anchor="middle" font-family="JetBrains Mono, Consolas, monospace" font-weight="700" font-size="${size}" fill="${col}" filter="url(#glowT)">${txt}</text>`; }
+Object.assign(sfx,{
+  spark(){ nz({dur:.35,freq:5000,q:.4,gain:.5,attack:.002}); nz({dur:.12,freq:900,q:2,gain:.4,delay:.05}); },
+  alarm(){ tn(440,.5,'sawtooth',.05,880); tn(880,.5,'sawtooth',.05,440,.5); },
+  tubeon(){ for(let i=0;i<5;i++) nz({dur:.05,freq:3000,q:6,gain:.2,delay:i*.12+Math.random()*.05}); },
+});
+
+/* ============================== PARAMETERS, PART 2 ============================== */
+const GM=3.71, G0=9.80665, LAT=18.4;
+const BARS=[{m:'Ti',a:8},{m:'Ti',a:10},{m:'Al',a:12},{m:'Al',a:16},{m:'St',a:12},{m:'St',a:16}];
+const MAT={Ti:{n:'Ti-6Al-4V',E:114,sy:880},Al:{n:'Al 6061-T6',E:69,sy:276},St:{n:'Steel A36',E:200,sy:250}};
+const FOS=2.5;
+function barCheck(b,F,L){ const A=(b.a/1000)**2, I=(b.a/1000)**4/12, M=MAT[b.m]; const sig=F/A/1e6, Pcr=Math.PI**2*M.E*1e9*I/L**2; return {sig,Pcr,yieldOK:F*FOS<=M.sy*1e6*A, buckOK:F*FOS<=Pcr}; }
+let PRC=null;
+function P(){
+  if(PRC&&PRC.seed===S.seed) return PRC;
+  const r=mulberry(S.seed); const pick=a=>a[Math.floor(r()*a.length)]; const ri=(a,b,st=1)=>a+st*Math.floor(r()*((b-a)/st+1));
+  const o={seed:S.seed};
+  o.dv=ri(3800,4300,50); o.isp=ri(350,375,5); o.mdry=ri(1500,2200,50); o.MR=Math.exp(o.dv/(o.isp*G0)); o.mp=o.mdry*(o.MR-1); o.tankCap=Math.round(o.mp*1.15/50)*50; o.m0=o.mdry+o.mp;
+  o.OF=pick([3.2,3.3,3.4,3.5,3.6]); o.mf=o.mp/(1+o.OF); o.mo=o.mp-o.mf; o.nCH4=o.mf/16.043; o.nO2=o.mo/31.998;
+  o.co2Sab=o.nCH4*44.009; o.co2Mox=2*o.nO2*44.009; o.h2No=4*o.nCH4*2.016; o.h2Rec=2*o.nCH4*2.016; o.h2Stock=Math.round((o.h2Rec*1.2+(o.h2No*.85-o.h2Rec*1.2)*r())/5)*5;
+  o.rho=1141; o.pv=100; o.Vox=o.mo/o.rho;
+  for(let k=0;k<200;k++){ o.twin=ri(18,30); o.D1=pick([40,50]); o.D2=pick([16,18,20,22]); o.h=ri(4,9); o.pmax=ri(200,300,10);
+    o.Qreq=o.Vox*1000/(o.twin*60); o.p1min=p1min(o,o.Qreq); if(o.p1min<=o.pmax-15&&o.p1min>o.pv+30) break; }
+  o.Fs=o.m0*GM/4*1.5;
+  for(let k=0;k<2000;k++){ o.L=ri(30,90)/100; const mats=['Ti','Ti','Al','Al','St','St']; o.bars=mats.map(m=>({m,a:pick([6,8,10,12,14,16,20])})).sort((x,y)=>x.m<y.m?-1:x.m>y.m?1:x.a-y.a); if(new Set(o.bars.map(b=>b.m+b.a)).size<6) continue; const res=o.bars.map(b=>barCheck(b,o.Fs,o.L)); const pass=res.filter(x=>x.yieldOK&&x.buckOK).length, trap=res.some(x=>x.yieldOK&&!x.buckOK), yf=res.some(x=>!x.yieldOK);
+    if(pass>=1&&pass<=3&&trap&&yf){ o.barRes=res; break; } if(k===1999){ o.barRes=res; } }
+  for(let k=0;k<100;k++){ o.Tmax=ri(30,80); const lo=Math.ceil(1.6*o.m0*GM/(o.Tmax*1000)*100), hi=Math.floor(1.9*o.m0*GM/(o.Tmax*1000)*100); if(lo>=45&&hi<=100&&hi>=lo){ o.thrLo=lo; o.thrHi=hi; break; } }
+  o.inc=ri(25,40); o.az=Math.asin(Math.cos(o.inc*Math.PI/180)/Math.cos(LAT*Math.PI/180))*180/Math.PI;
+  o.Torb=ri(110,118); o.tasc=ri(8,12); o.thdr=ri(22,30); o.phi0=ri(60,200); o.phiL=o.thdr-360*o.tasc/o.Torb; o.wait=((((o.phiL-o.phi0)%360)+360)%360)/(360/o.Torb);
+  PRC=o; return o;
+}
+function p1min(o,Q){ const v1=Q/1000/(Math.PI*(o.D1/2000)**2), v2=Q/1000/(Math.PI*(o.D2/2000)**2); return o.pv+(.5*o.rho*(v2*v2-v1*v1)+o.rho*GM*o.h)/1000; }
+function throatP(o,Q,p1){ const v1=Q/1000/(Math.PI*(o.D1/2000)**2), v2=Q/1000/(Math.PI*(o.D2/2000)**2); return p1-(.5*o.rho*(v2*v2-v1*v1)+o.rho*GM*o.h)/1000; }
+const fk=x=>Math.round(x).toLocaleString('en-GB'), f1=(x,d=1)=>Number(x).toFixed(d);
+if(!window.__v) window.__v=1;
+/* ---------- numeric control ---------- */
+function numCtl(id,x,y,label,unit,steps,dec=0,w=520){
+  const bw=Math.min(64,(w-20)/(steps.length*2)-6);
+  return `<g><rect x="${x}" y="${y}" width="${w}" height="132" rx="10" fill="#1b2226" stroke="#3a4448" stroke-width="3"/><text x="${x+18}" y="${y+30}" font-family="${UI}" font-size="18" fill="#9aa29f">${label}</text>
+  <text id="nv-${id}" x="${x+w/2}" y="${y+76}" text-anchor="middle" font-family="${MONO}" font-weight="700" font-size="36" fill="#3fe0d0" filter="url(#glowT)"></text><text x="${x+w-18}" y="${y+30}" text-anchor="end" font-family="${MONO}" font-size="16" fill="#9aa29f">${unit}</text>
+  ${[...steps.map(s=>-s).sort((a,b)=>a-b),...steps.slice().sort((a,b)=>a-b)].map((s,i)=>`<g data-act="n:${id}:${s}"><rect x="${x+10+i*(bw+6)}" y="${y+90}" width="${bw}" height="32" rx="5" fill="#3a4448"/><text x="${x+10+i*(bw+6)+bw/2}" y="${y+112}" text-anchor="middle" font-family="${MONO}" font-size="${bw<50?12:14}" fill="#fff">${s>0?'+':'−'}${Math.abs(s)}</text></g>`).join('')}</g>`;
+}
+const NDEC={};
+function numAct(a){ if(!a.startsWith('n:')) return false; const [,id,st]=a.split(':'); S.v=S.v||{}; const d=NDEC[id]||0; S.v[id]=Math.max(0,Math.round(((S.v[id]||0)+parseFloat(st))*10**d)/10**d); sfx.tick(); refresh(); return true; }
+function numShow(el,ids){ ids.forEach(id=>{ const n=el.querySelector('#nv-'+id); if(n) n.textContent=((S.v&&S.v[id])||0).toFixed(NDEC[id]||0); }); }
+const val=id=>(S.v&&S.v[id])||0;
+const within=(x,t,lo,hi)=>x>=t*lo&&x<=t*hi;
+function rocket(x,y,s=1,flame=false){ return `<g transform="translate(${x} ${y}) scale(${s})">${flame?`<ellipse class="flicker" cx="0" cy="40" rx="22" ry="70" fill="url(#gFlame)"/>`:''}<path d="M-26 0 V-210 Q0 -290 26 -210 V0Z" fill="#e8ece9" stroke="#5a6266" stroke-width="3"/><rect x="-26" y="-150" width="52" height="30" fill="url(#pHaz)"/><path d="M-26 0 L-50 30 L-26 -40Z M26 0 L50 30 L26 -40Z" fill="#c0503a"/><circle cx="0" cy="-200" r="9" fill="#2a5a7a" stroke="#5a6266" stroke-width="2"/><path d="M-16 0 L-20 18 H20 L16 0Z" fill="#3a4448"/></g>`; }
+
+/* ============================== PROPELLANT BAY (overview) ============================== */
+scenes.pbay={ title:'Propellant bay', parent:null,
+render(){
+  const st=n=>`<circle cx="0" cy="0" r="10" fill="${S.f[n]?'#3fe0d0':'#c0503a'}"/>`;
+  return `<g data-depth=".25">
+    <rect width="1600" height="700" fill="url(#gPanD)"/>${Array.from({length:9},(_,i)=>`<rect x="${i*200-10}" y="0" width="20" height="700" fill="#3a4448"/>`).join('')}<rect y="16" width="1600" height="12" fill="#eaf6ff"/>
+    <g data-go="cockpit" data-cap="Through the window: ascent vehicle AV-2 on the pad">
+      <rect x="760" y="60" width="800" height="500" rx="16" fill="#2a3034"/><clipPath id="pbWin"><rect x="776" y="76" width="768" height="468" rx="10"/></clipPath>
+      <g clip-path="url(#pbWin)"><rect x="776" y="76" width="768" height="468" fill="url(#gMars)"/><path d="M776 430 Q1000 400 1200 420 T1544 410 V544 H776Z" fill="#6a2c14"/><rect x="1100" y="420" width="240" height="20" fill="#3a4448"/><rect x="1300" y="160" width="20" height="270" fill="#f2c230"/>${rocket(1220,420,1)}${Array.from({length:20},()=>`<line class="streak" x1="${rnd(780,1540)}" y1="${rnd(90,520)}" x2="${rnd(780,1540)+30}" y2="${rnd(90,520)+4}" stroke="#ffd2a0" stroke-width="1.5" opacity=".35" style="animation-delay:${-rnd(0,3).toFixed(1)}s"/>`).join('')}</g>
+      <rect x="776" y="76" width="768" height="468" rx="10" fill="url(#gGlass)" opacity=".3"/>
+      <g transform="translate(1520 100)">${st('strut')}</g>
+    </g>
+    <g data-go="planner" data-cap="Mission planner console">
+      <rect x="50" y="160" width="300" height="440" rx="10" fill="#1b2226" stroke="#3a4448" stroke-width="4"/><rect x="70" y="180" width="260" height="180" rx="6" fill="url(#gScreen)"/><path d="M90 340 Q160 330 200 260 T310 200" stroke="#3fe0d0" stroke-width="3" fill="none"/><text x="200" y="400" text-anchor="middle" font-family="${UI}" font-weight="700" font-size="22" fill="#e8ece9">MISSION PLANNER</text>
+      <g transform="translate(320 580)">${st('plan')}</g>
+    </g>
+    <g data-go="synth" data-cap="ISRU plant: Sabatier reactor and MOXIE oxygen unit">
+      <rect x="380" y="120" width="160" height="480" rx="70" fill="url(#gCylV)" stroke="#1b2226" stroke-width="4"/><rect x="380" y="300" width="160" height="40" fill="url(#pHaz)"/><text x="460" y="440" text-anchor="middle" font-family="${UI}" font-weight="700" font-size="20" fill="#1b2226">SABATIER</text>
+      <rect x="560" y="300" width="170" height="300" rx="10" fill="url(#gPan)" stroke="#5a6266" stroke-width="4"/><text x="645" y="360" text-anchor="middle" font-family="${UI}" font-weight="700" font-size="22" fill="#1b2226">MOXIE-9</text>${[0,1,2,3].map(i=>`<rect x="585" y="${390+i*44}" width="120" height="30" fill="#3a6ea5"/>`).join('')}
+      <g transform="translate(710 580)">${st('synth')}</g>
+    </g>
+  </g>
+  <g data-depth=".5"><rect y="700" width="1600" height="200" fill="url(#pGrate)"/></g>
+  <g data-depth="1">
+    <g data-go="transfer" data-cap="LOX transfer pump and line to the pad">
+      <rect x="300" y="640" width="160" height="140" rx="12" fill="url(#gPanD)" stroke="#1b2226" stroke-width="4"/><circle cx="380" cy="710" r="44" fill="#3a4448"/><path d="M460 710 H900 Q960 710 980 620 L1000 560" stroke="#7ab0d8" stroke-width="22" fill="none"/><path d="M620 700 h40 v20 h-40z" fill="#c0503a"/>
+      <g transform="translate(440 760)">${st('transfer')}</g>
+    </g>
+    <g data-go="strut" data-cap="Pad leg struts and the test press">
+      <rect x="1100" y="620" width="460" height="260" rx="10" fill="#1b2226" stroke="#3a4448" stroke-width="4"/>${[0,1,2,3,4,5].map(i=>`<rect x="${1130+i*40}" y="650" width="${10+i*2}" height="200" fill="url(#gCylV)"/>`).join('')}<rect x="1400" y="640" width="130" height="220" fill="#3a4448"/><rect x="1420" y="660" width="90" height="30" fill="#f2c230"/>
+    </g>
+  </g>`;
+},
+mount(el){ const svg=el.querySelector('svg'); const gs=[...el.querySelectorAll('[data-depth]')]; el.onmousemove=e=>{ const r=svg.getBoundingClientRect(); if(!r.width) return; const dx=(e.clientX-r.left)/r.width-.5, dy=(e.clientY-r.top)/r.height-.5; gs.forEach(g=>{ const d=+g.dataset.depth; g.setAttribute('transform',`translate(${(-dx*20*d).toFixed(1)} ${(-dy*10*d).toFixed(1)})`); }); }; },
+};
+const STY=`<style>.streak{animation:streak 1.4s linear infinite}@keyframes streak{from{transform:translateX(-300px)}to{transform:translateX(300px)}}</style>`;
+
+/* ============================== PLANNER ============================== */
+NDEC.prop=0;
+scenes.planner={ title:'Mission planner', parent:'pbay',
+render(){ const p=P();
+  return `<rect width="1600" height="900" fill="#151b1e"/>
+  <rect x="40" y="30" width="900" height="540" rx="12" fill="url(#gScreen)" stroke="#3a4448" stroke-width="4"/>
+  <text x="70" y="76" font-family="${MONO}" font-size="22" fill="#3fe0d0" filter="url(#glowT)">HALE> ASCENT PROFILE · AV-2 → ORBITER</text>
+  <circle cx="490" cy="740" r="420" fill="none" stroke="#3a4448" stroke-width="3"/><circle cx="490" cy="740" r="540" fill="none" stroke="#3fe0d0" stroke-dasharray="8 10" stroke-width="2" opacity=".6"/>
+  <path d="M490 320 Q520 200 700 230" stroke="#f2c230" stroke-width="4" fill="none"/>${rocket(490,322,.18)}
+  <text id="plMsg" x="70" y="540" font-family="${MONO}" font-size="20" fill="#3fe0d0"></text>
+  ${plate('mission',980,30,580,'Mission requirement',[`Δv to orbit incl. losses: ${fk(p.dv)} m/s`],18)}
+  ${plate('engine',980,140,580,'Engine: Raptor-M (vacuum-rated)',[`Specific impulse Isp: ${p.isp} s`],18)}
+  ${plate('dry',980,250,580,'AV-2 vehicle',[`Dry mass (with you aboard): ${fk(p.mdry)} kg`,`Tank capacity: ${fk(p.tankCap)} kg propellant`],18)}
+  ${numCtl('prop',980,410,'Propellant load','kg',[1000,100,10,1],0,580)}
+  <g data-act="commit"><rect x="980" y="560" width="580" height="64" rx="10" fill="#3fbfb0"/><text x="1270" y="600" text-anchor="middle" font-family="${UI}" font-weight="700" font-size="22" fill="#0e1a1c">COMMIT PROPELLANT LOAD</text></g>
+  <rect x="40" y="600" width="1520" height="270" rx="12" fill="#1b2226"/><text x="70" y="650" font-family="${UI}" font-size="22" fill="#e8ece9">HALE:</text>
+  <text id="plHale" x="70" y="690" font-family="${MONO}" font-size="19" fill="#9aa29f"></text><text id="plHale2" x="70" y="724" font-family="${MONO}" font-size="19" fill="#9aa29f"></text>`;
+},
+update(el){ numShow(el,['prop']); const p=P(); el.querySelector('#plHale').textContent=S.f.plan?`Load committed: ${fk(val('prop'))} kg. Fuel and oxidiser are next.`:'Size the propellant load. Every kilogram has to be made from the air.';
+  el.querySelector('#plHale2').textContent=S.f.plan?'':'The rocket equation is in my manual, under Rocket equation.'; el.querySelector('#plMsg').textContent=S.f.plan?`Δv available: ${fk(p.isp*G0*Math.log((p.mdry+val('prop'))/p.mdry))} m/s ✓`:''; },
+act(a){ if(a.startsWith('plate-')) return openPlate(a.slice(6)); if(S.f.plan){ say('The load is committed.'); return; } if(numAct(a)) return;
+  if(a==='commit'){ const p=P(), x=val('prop'); if(x<=0) return;
+    if(x>p.tankCap){ sfx.buzz(); S.mistakes++; say(`<b>${fk(x)} kg won't fit.</b> The tanks hold ${fk(p.tankCap)} kg. HALE: <i>"Check which g goes in the rocket equation."</i>`,5600); save(); return; }
+    const dv=p.isp*G0*Math.log((p.mdry+x)/p.mdry);
+    if(within(x,p.mp,.985,1.015)){ S.f.plan=true; sfx.success(); note(`Propellant load ${fk(x)} kg: Δv ${fk(dv)} m/s for a ${fk(p.dv)} m/s mission.`); say(`HALE: <i>"${fk(dv)} m/s. That matches the mission with no wasted mass. Committed."</i>`,4800); refresh(); save(); return; }
+    sfx.buzz(); S.mistakes++; say(x<p.mp?`That load gives only ${fk(dv)} m/s. The mission needs ${fk(p.dv)} m/s.`:`That load gives ${fk(dv)} m/s, more than the ${fk(p.dv)} m/s needed. Extra propellant is extra weight and extra hours of ISRU. HALE wants it within 1.5 %.`,5400); save(); }
+}};
+
+/* ============================== SYNTHESIS ============================== */
+NDEC.co2s=0; NDEC.co2m=0; NDEC.h2=0;
+scenes.synth={ title:'ISRU plant', parent:'pbay',
+render(){ const p=P();
+  return `<rect width="1600" height="900" fill="#151b1e"/>
+  ${plate('mix',30,20,500,'Engine mixture ratio',[`Oxidiser : fuel = ${p.OF.toFixed(1)} : 1 by mass`,'Fuel CH₄, oxidiser O₂'],16)}
+  ${plate('react',30,150,500,'Plant reactions',['Sabatier: CO₂ + 4 H₂ → CH₄ + 2 H₂O','MOXIE: 2 CO₂ → 2 CO + O₂','Electrolyser: 2 H₂O → 2 H₂ + O₂'],16)}
+  ${plate('molar',30,320,500,'Molar masses (g/mol)',['H 1.008   C 12.011   O 15.999'],16)}
+  ${plate('h2tank',30,430,500,'H₂ storage',[`Available: ${fk(p.h2Stock)} kg`],16)}
+  <g data-act="recycle" data-cap="Route Sabatier water back through the electrolyser"><rect x="30" y="540" width="500" height="80" rx="10" fill="#1b2226" stroke="#3a4448" stroke-width="3"/><text x="50" y="572" font-family="${UI}" font-size="18" fill="#e8ece9">Recycle Sabatier water</text><text x="50" y="600" font-family="${UI}" font-size="15" fill="#9aa29f">sends the H₂O back to the electrolyser for its H₂</text><rect x="420" y="560" width="90" height="44" rx="22" fill="#2a3034" stroke="#5a6266"/><circle id="syRec" cx="444" cy="582" r="18" fill="#9aa29f"/></g>
+  <rect x="560" y="20" width="1010" height="380" rx="12" fill="#1b2226"/>
+  ${[['CH₄ fuel',620,'syCH','#e0905a'],['LOX oxidiser',800,'syOX','#7ab0d8']].map(([n,x,id,c])=>`<rect x="${x}" y="60" width="140" height="300" rx="60" fill="url(#gCylV)" stroke="#1b2226" stroke-width="3"/><rect x="${x+25}" y="90" width="90" height="250" rx="30" fill="#0e1a1c"/><rect id="${id}" x="${x+25}" y="340" width="90" height="0" rx="20" fill="${c}"/><text x="${x+70}" y="385" text-anchor="middle" font-family="${UI}" font-size="18" fill="#e8ece9">${n}</text><text id="${id}t" x="${x+70}" y="50" text-anchor="middle" font-family="${MONO}" font-size="16" fill="#9aa29f"></text>`).join('')}
+  <g id="syBub"></g>
+  <text id="syMsg" x="980" y="110" font-family="${MONO}" font-size="18" fill="#3fe0d0"></text><text id="syMsg2" x="980" y="140" font-family="${MONO}" font-size="18" fill="#3fe0d0"></text>
+  <text x="980" y="200" font-family="${UI}" font-size="17" fill="#9aa29f">Propellant to make: as committed in the planner.</text>
+  <text id="syProp" x="980" y="232" font-family="${MONO}" font-size="20" fill="#e8ece9"></text>
+  ${numCtl('co2s',560,420,'Sabatier CO₂ intake','kg',[1000,100,10,1],0,500)}
+  ${numCtl('co2m',1070,420,'MOXIE CO₂ intake','kg',[1000,100,10,1],0,500)}
+  ${numCtl('h2',560,570,'H₂ drawn from storage','kg',[100,10,1],0,500)}
+  <g data-act="run"><rect x="1070" y="570" width="500" height="132" rx="10" fill="#3fbfb0"/><text x="1320" y="645" text-anchor="middle" font-family="${UI}" font-weight="700" font-size="24" fill="#0e1a1c">RUN THE PLANT</text></g>`;
+},
+fill(el,f,ch,ox){ const p=P(); el.querySelector('#syCH').setAttribute('height',250*f*ch); el.querySelector('#syCH').setAttribute('y',340-250*f*ch); el.querySelector('#syOX').setAttribute('height',250*f*ox); el.querySelector('#syOX').setAttribute('y',340-250*f*ox); el.querySelector('#syCHt').textContent=fk(p.mf*f*ch)+' kg'; el.querySelector('#syOXt').textContent=fk(p.mo*f*ox)+' kg'; },
+update(el){ numShow(el,['co2s','co2m','h2']); const k=el.querySelector('#syRec'); k.setAttribute('cx',S.f.rec?486:444); k.setAttribute('fill',S.f.rec?'#3fe0d0':'#9aa29f'); el.querySelector('#syProp').textContent=S.f.plan?`${fk(val('prop'))} kg total`:'(planner not done)'; if(S.f.synth) this.fill(el,1,1,1); },
+act(a,h,el){ if(a.startsWith('plate-')) return openPlate(a.slice(6));
+  if(!S.f.plan){ say('HALE: <i>"Size the propellant load in the planner first. I don\'t know how much to make."</i>'); return; }
+  if(S.f.synth){ say('Both tanks are full.'); return; } if(numAct(a)) return;
+  if(a==='recycle'){ S.f.rec=!S.f.rec; sfx.click(); refresh(); return; }
+  if(a==='run'){ if(this._run) return; this._run=true; const p=P();
+    const need=S.f.rec?p.h2Rec:p.h2No, h=val('h2'), cs=val('co2s'), cm=val('co2m');
+    let ch=Math.min(1,cs/p.co2Sab, h/need), ox=Math.min(1,cm/p.co2Mox); if(h>p.h2Stock) ch=Math.min(ch,p.h2Stock/need);
+    const bub=el.querySelector('#syBub'); bub.innerHTML=Array.from({length:30},()=>`<circle cx="${rnd(640,940)}" cy="${rnd(100,340)}" r="${rnd(2,5)}" fill="#fff" opacity=".5"><animate attributeName="cy" by="-80" dur="${rnd(.6,1.4).toFixed(2)}s" repeatCount="indefinite"/></circle>`).join('');
+    nz({dur:3.5,freq:500,q:.6,gain:.15,attack:.4}); let f=0;
+    const iv=setInterval(()=>{ f=Math.min(1,f+.04); this.fill(el,f,ch,ox); if(f<1) return; clearInterval(iv); bub.innerHTML=''; this._run=false;
+      const errs=[];
+      if(h>p.h2Stock) errs.push(`you asked for ${fk(h)} kg of H₂ but storage only holds ${fk(p.h2Stock)} kg`);
+      else if(h<need*.98) errs.push(`H₂ ran out: only ${(ch*100).toFixed(0)} % of the methane was made`);
+      else if(h>need*1.05) errs.push(`${fk(h-need)} kg of unreacted H₂ had to be vented`);
+      if(!within(cs,p.co2Sab,.98,1.05)) errs.push(cs<p.co2Sab?`the Sabatier reactor ran short of CO₂`:`excess CO₂ through the Sabatier reactor diluted the methane`);
+      if(!within(cm,p.co2Mox,.98,1.05)) errs.push(cm<p.co2Mox?`MOXIE made only ${(ox*100).toFixed(0)} % of the oxygen`:`MOXIE overproduced and vented oxygen`);
+      if(!errs.length){ S.f.synth=true; sfx.success(); note(`Made ${fk(p.mf)} kg CH₄ and ${fk(p.mo)} kg O₂ (CO₂: ${fk(cs)} + ${fk(cm)} kg, H₂ ${fk(h)} kg${S.f.rec?', water recycled':''}).`); say(`Both tanks read full. HALE: <i>"${fk(p.mf)} kg methane, ${fk(p.mo)} kg oxygen, mixture ${p.OF.toFixed(1)}:1. Ready to transfer."</i>`,5600); refresh(); }
+      else { sfx.buzz(); S.mistakes++; say(`<b>Batch rejected:</b> ${errs.join('; ')}.`,6800); setTimeout(()=>this.fill(el,0,0,0),2500); }
+      save(); },100);
+  }
+}};
+
+/* ============================== LOX TRANSFER ============================== */
+NDEC.flow=2; NDEC.pp=0;
+scenes.transfer={ title:'LOX transfer line', parent:'pbay',
+render(){ const p=P();
+  return `<rect width="1600" height="900" fill="#151b1e"/>
+  ${plate('lox',30,20,470,'Liquid oxygen (storage)',[`Density ${p.rho} kg/m³`,`Vapour pressure ${p.pv} kPa`,`To transfer: ${fk(p.mo)} kg`],16)}
+  ${plate('pipe',520,20,520,'Transfer line',[`Main pipe bore ${p.D1} mm`,`Damaged section bore ${p.D2} mm`,`Damaged section ${p.h} m above the pump`],16)}
+  ${plate('lim',1060,20,510,'Limits',[`Pump max outlet pressure ${p.pmax} kPa`,`Transfer window: ${p.twin} min`],16)}
+  <rect x="40" y="440" width="190" height="300" rx="40" fill="url(#gCylV)" stroke="#1b2226" stroke-width="4"/><text x="135" y="770" text-anchor="middle" font-family="${UI}" font-size="18" fill="#e8ece9">LOX store</text>
+  <circle cx="330" cy="660" r="60" fill="url(#gPanD)" stroke="#1b2226" stroke-width="4"/><g id="tfImp" style="transform-origin:330px 660px;transform-box:view-box">${[0,1,2,3,4,5].map(i=>`<path d="M330 660 L${330+44*Math.cos(i*Math.PI/3)} ${660+44*Math.sin(i*Math.PI/3)}" stroke="#9aa29f" stroke-width="8"/>`).join('')}</g>
+  <path d="M230 660 H270" stroke="#7ab0d8" stroke-width="40"/>
+  <path id="tfPipe" d="M390 660 H640 V340 H760" stroke="#7ab0d8" stroke-width="40" fill="none"/>
+  <path d="M760 340 H820 L860 332 H940 L980 340 H1260" stroke="#7ab0d8" stroke-width="40" fill="none"/>
+  <rect x="820" y="318" width="160" height="44" fill="#c0503a" opacity=".35"/><text x="900" y="300" text-anchor="middle" font-family="${UI}" font-size="16" fill="#f2c230">damaged section</text>
+  <path id="tfFlow" d="M230 660 H640 V340 H1260" stroke="#e8f6ff" stroke-width="6" fill="none" stroke-dasharray="10 26" opacity="0"/>
+  <g id="tfCav"></g>
+  <line x1="640" y1="660" x2="640" y2="340" stroke="none"/><path d="M600 640 V360" stroke="#f2c230" stroke-width="2" stroke-dasharray="6 6"/><text x="590" y="510" text-anchor="end" font-family="${MONO}" font-size="16" fill="#f2c230">${p.h} m</text>
+  <rect x="1260" y="200" width="300" height="420" rx="60" fill="url(#gCylV)" stroke="#1b2226" stroke-width="4"/><rect x="1300" y="240" width="220" height="340" rx="40" fill="#0e1a1c"/><rect id="tfTank" x="1300" y="580" width="220" height="0" rx="30" fill="#7ab0d8"/><text x="1410" y="650" text-anchor="middle" font-family="${UI}" font-size="18" fill="#e8ece9">AV-2 LOX tank</text>
+  <text id="tfMsg" x="900" y="420" text-anchor="middle" font-family="${MONO}" font-size="18" fill="#3fe0d0"></text>
+  ${numCtl('flow',40,760,'Flow rate','L/s',[1,.1,.01],2,460)}
+  ${numCtl('pp',520,760,'Pump outlet pressure','kPa',[100,10,1],0,460)}
+  <g data-act="run"><rect x="1000" y="760" width="560" height="132" rx="10" fill="#3fbfb0"/><text x="1280" y="835" text-anchor="middle" font-family="${UI}" font-weight="700" font-size="24" fill="#0e1a1c">START TRANSFER</text></g>`;
+},
+update(el){ numShow(el,['flow','pp']); if(S.f.transfer){ el.querySelector('#tfTank').setAttribute('height',340); el.querySelector('#tfTank').setAttribute('y',240); } },
+act(a,h,el){ if(a.startsWith('plate-')) return openPlate(a.slice(6));
+  if(!S.f.synth){ say('HALE: <i>"Nothing to transfer yet. Run the ISRU plant first."</i>'); return; } if(S.f.transfer){ say('The vehicle\'s LOX tank is full.'); return; } if(numAct(a)) return;
+  if(a==='run'){ if(this._run) return; const p=P(), Q=val('flow'), p1=val('pp'); if(Q<=0||p1<=0) return;
+    if(p1>p.pmax){ sfx.buzz(); say(`The pump tops out at ${p.pmax} kPa. It can't deliver ${p1} kPa.`); return; }
+    this._run=true; const p2=throatP(p,Q,p1), mins=p.Vox*1000/Q/60; const fl=el.querySelector('#tfFlow'); fl.setAttribute('opacity',.8); const an=fl.animate([{strokeDashoffset:0},{strokeDashoffset:-36}],{duration:Math.max(80,600/Q),iterations:Infinity});
+    el.querySelector('#tfImp').animate([{transform:'rotate(0)'},{transform:'rotate(360deg)'}],{duration:Math.max(100,800/Q),iterations:20}); nz({dur:3,freq:300,q:1,gain:.15,attack:.3});
+    const cav=p2<p.pv, tank=el.querySelector('#tfTank');
+    if(cav) el.querySelector('#tfCav').innerHTML=Array.from({length:26},()=>`<circle cx="${rnd(830,1100)}" cy="${rnd(326,354)}" r="${rnd(2,7)}" fill="#fff" opacity=".8"><animate attributeName="r" values="1;7;0" dur="${rnd(.3,.7).toFixed(2)}s" repeatCount="indefinite"/></circle>`).join('');
+    let f=0; const iv=setInterval(()=>{ f+=.04; const lvl=cav?Math.min(f,.25)*(.6+Math.random()*.4):Math.min(1,f); tank.setAttribute('height',340*lvl); tank.setAttribute('y',580-340*lvl); el.querySelector('#tfMsg').textContent=`throat ${p2.toFixed(1)} kPa · ${mins.toFixed(1)} min to fill`;
+      if(f<1.05) return; clearInterval(iv); an.cancel(); fl.setAttribute('opacity',0); this._run=false; el.querySelector('#tfCav').innerHTML='';
+      if(cav){ sfx.rattle(); S.mistakes++; tank.setAttribute('height',0); say(`<b>Cavitation.</b> Pressure in the damaged section fell to ${p2.toFixed(1)} kPa, below LOX's ${p.pv} kPa vapour pressure. It boiled into bubbles and the pump choked.`,6400); }
+      else if(mins>p.twin){ sfx.buzz(); S.mistakes++; tank.setAttribute('height',0); say(`Flow is clean, but at ${Q} L/s the transfer takes ${mins.toFixed(1)} min. The window is ${p.twin} min.`,5200); }
+      else { S.f.transfer=true; sfx.success(); note(`LOX transferred: ${Q} L/s at ${p1} kPa, throat pressure ${p2.toFixed(1)} kPa, ${mins.toFixed(1)} min.`); say(`The tank fills in ${mins.toFixed(1)} minutes. Throat pressure held at ${p2.toFixed(1)} kPa, safely above boiling.`,5200); }
+      save(); },100);
+  }
+}};
+
+/* ============================== STRUT ============================== */
+scenes.strut={ title:'Pad leg struts', parent:'pbay',
+render(){ const p=P();
+  const rack=p.bars.map((b,i)=>{ const x=640+i*150, w=8+b.a*2.2; return `<g data-act="bar-${i}" data-cap="${MAT[b.m].n}, ${b.a} mm square bar" id="br${i}"><rect x="${x}" y="560" width="130" height="320" rx="8" fill="#1b2226" stroke="#3a4448"/><rect x="${x+65-w/2}" y="590" width="${w}" height="230" fill="${b.m==='Ti'?'#9aa8b8':b.m==='Al'?'#d8dcdc':'#6a7076'}" stroke="#1b2226"/><text x="${x+65}" y="846" text-anchor="middle" font-family="${MONO}" font-size="16" fill="#e8ece9">${b.m==='St'?'Steel':b.m}</text><text x="${x+65}" y="868" text-anchor="middle" font-family="${MONO}" font-size="16" fill="#f2c230">□${b.a} mm</text></g>`; }).join('');
+  return `<rect width="1600" height="900" fill="#151b1e"/>
+  ${plate('legs',30,20,560,'Pad leg strut',[`Square solid bar, pinned both ends`,`Length ${p.L.toFixed(2)} m`,'Load: ¼ of fuelled AV-2 weight, × 1.5','  dynamic factor (engine start)','Factor of safety 2.5 on yield AND buckling'],16)}
+  ${plate('mats',30,240,560,'Materials',['Ti-6Al-4V   E 114 GPa   σy 880 MPa','Al 6061-T6  E  69 GPa   σy 276 MPa','Steel A36   E 200 GPa   σy 250 MPa'],16)}
+  ${plate('mass',30,410,560,'Fuelled AV-2',['dry mass + committed propellant'],16)}
+  <rect x="640" y="30" width="920" height="500" rx="12" fill="#1b2226"/>
+  <rect x="980" y="50" width="240" height="40" fill="#5a6266"/><rect id="stRam" x="1060" y="90" width="80" height="60" fill="#c9cfcc"/><rect x="940" y="470" width="320" height="40" fill="#5a6266"/>
+  <g id="stBar"></g><text id="stMsg" x="1100" y="520" text-anchor="middle" font-family="${MONO}" font-size="16" fill="#3fe0d0"></text>
+  <text x="680" y="90" font-family="${UI}" font-size="18" fill="#9aa29f">Test press</text><text id="stSel" x="680" y="124" font-family="${MONO}" font-size="18" fill="#f2c230"></text>
+  <g data-act="test"><rect x="680" y="420" width="220" height="70" rx="8" fill="#c0503a"/><text x="790" y="463" text-anchor="middle" font-family="${UI}" font-weight="700" font-size="20" fill="#fff">PROOF TEST</text></g>
+  <text x="640" y="548" font-family="${UI}" font-size="16" fill="#9aa29f">Bar stock: click to load into the press</text>${rack}`;
+},
+drawBar(el,mode){ const p=P(), b=p.bars[S.bar]; if(!b){ el.querySelector('#stBar').innerHTML=''; return; } const w=8+b.a*2.2, col=b.m==='Ti'?'#9aa8b8':b.m==='Al'?'#d8dcdc':'#6a7076';
+  const d=mode==='buckle'?`M1100 150 Q${1100+90} 310 1100 470`:mode==='crush'?`M1100 250 L1100 470`:`M1100 150 L1100 470`;
+  el.querySelector('#stBar').innerHTML=`<path d="${d}" stroke="${mode==='crush'?'#c0503a':col}" stroke-width="${mode==='crush'?w*1.8:w}" fill="none"/>${mode==='pass'?`<path d="${d}" stroke="#3fe0d0" stroke-width="3" fill="none"/>`:''}`;
+  el.querySelector('#stSel').textContent=`${MAT[b.m].n}, □${b.a} mm`; },
+update(el){ const p=P(); p.bars.forEach((_,i)=>el.querySelector('#br'+i).style.opacity=S.bar===i?.35:1); this.drawBar(el,S.f.strut?'pass':''); el.querySelector('#stRam').setAttribute('y',S.f.strut?100:90); },
+act(a,h,el){ if(a.startsWith('plate-')){ if(a==='plate-mass'){ const p=P(); return modal('Fuelled AV-2',`<p class="mtext">Dry ${fk(p.mdry)} kg + propellant ${S.f.plan?fk(val('prop'))+' kg':'(not yet committed)'}.</p>`); } return openPlate(a.slice(6)); }
+  if(S.f.strut){ say('The pad legs are fitted and proof-tested.'); return; }
+  if(a.startsWith('bar-')){ S.bar=+a.slice(4); sfx.clunk(); refresh(); return; }
+  if(a==='test'){ const p=P(); if(!S.f.plan){ say('HALE: <i>"I can\'t set the proof load until the propellant load is committed."</i>'); return; } if(S.bar==null){ say('Load a bar into the press first.'); return; }
+    const b=p.bars[S.bar], c=barCheck(b,p.Fs,p.L), ram=el.querySelector('#stRam'); ram.animate([{transform:'translateY(0)'},{transform:'translateY(12px)'}],{duration:900,fill:'forwards'}); nz({dur:1.2,freq:200,q:1,gain:.3,attack:.3});
+    setTimeout(()=>{ ram.getAnimations().forEach(x=>x.cancel());
+      if(!c.yieldOK){ this.drawBar(el,'crush'); sfx.clunk(); S.mistakes++; say(`<b>Yield failure.</b> At the proof load (${fk(p.Fs*FOS)} N) stress reaches ${(c.sig*FOS).toFixed(0)} MPa, above the ${MAT[b.m].sy} MPa yield of ${MAT[b.m].n}. The bar squashes.`,6400); }
+      else if(!c.buckOK){ this.drawBar(el,'buckle'); sfx.creak(); S.mistakes++; say(`<b>Buckling.</b> Stress is only ${(c.sig*FOS).toFixed(0)} MPa, but a ${p.L.toFixed(2)} m bar this slender buckles at ${fk(c.Pcr)} N. The proof load is ${fk(p.Fs*FOS)} N. It bows sideways.`,6800); }
+      else { S.f.strut=true; this.drawBar(el,'pass'); sfx.success(); note(`Pad legs: ${MAT[b.m].n} □${b.a} mm passes yield (${(c.sig*FOS).toFixed(0)} of ${MAT[b.m].sy} MPa) and buckling (${fk(p.Fs*FOS)} of ${fk(c.Pcr)} N).`); say(`The bar holds ${fk(p.Fs*FOS)} N without a quiver. HALE fits four of them to the pad.`,5000); }
+      save(); },1000);
+  }
+}};
+
+/* ============================== COCKPIT ============================== */
+NDEC.thr=0; NDEC.az=1; NDEC.wait=1;
+scenes.cockpit={ title:'AV-2 cockpit', parent:'pbay',
+render(){ const p=P();
+  return `<rect width="1600" height="900" fill="#0e1214"/>
+  <path d="M0 0 H1600 V200 Q800 120 0 200Z" fill="#1b2226"/><path d="M300 30 L1300 30 L1200 170 L400 170Z" fill="url(#gMars)" opacity=".8"/>
+  ${plate('tw',30,210,500,'Flight rule: liftoff thrust',['T/W at liftoff between 1.6 and 1.9 (Mars g)',`Engine max thrust ${p.Tmax} kN, deep-throttle to 40 %`],15)}
+  ${plate('nav',1060,210,510,'Navigation',[`Pad latitude ${LAT}° N`,`Orbiter inclination ${p.inc}°, period ${p.Torb} min`,`Orbiter now ${p.phi0}° along-track past the pad`,`Ascent to insertion: ${p.tasc} min, ${p.thdr}° downrange`],15)}
+  ${numCtl('thr',30,420,'Throttle at liftoff','%',[10,1],0,500)}
+  ${numCtl('az',1060,420,'Launch azimuth','° from north',[10,1,.1],1,510)}
+  ${numCtl('wait',1060,570,'Hold before launch','min',[10,1,.1],1,510)}
+  <circle cx="800" cy="440" r="210" fill="url(#gScreen)" stroke="#3a4448" stroke-width="4"/><circle cx="800" cy="440" r="70" fill="url(#gMars)"/><circle cx="800" cy="440" r="160" fill="none" stroke="#3fe0d0" stroke-dasharray="6 8" opacity=".6"/>
+  <circle cx="800" cy="370" r="8" fill="#f2c230"/><text x="800" y="355" text-anchor="middle" font-family="${MONO}" font-size="14" fill="#f2c230">pad</text>
+  <g id="cpOrb" style="transform-origin:800px 440px;transform-box:view-box"><circle cx="800" cy="280" r="9" fill="#3fe0d0"/><text x="815" y="275" font-family="${MONO}" font-size="14" fill="#3fe0d0">orbiter</text></g>
+  <g data-act="launch"><rect x="560" y="700" width="480" height="150" rx="16" fill="#c0503a" stroke="#5a1a10" stroke-width="5"/><text x="800" y="790" text-anchor="middle" font-family="${UI}" font-weight="700" font-size="40" fill="#fff">LAUNCH</text></g>
+  <text id="cpMsg" x="800" y="680" text-anchor="middle" font-family="${MONO}" font-size="17" fill="#9aa29f"></text>`;
+},
+update(el){ numShow(el,['thr','az','wait']); const p=P(); el.querySelector('#cpOrb').style.transform=`rotate(${p.phi0}deg)`; const ready=S.f.plan&&S.f.synth&&S.f.transfer&&S.f.strut; el.querySelector('#cpMsg').textContent=ready?'All ground systems green.':'HALE: ground systems not ready.'; },
+act(a,h,el){ if(a.startsWith('plate-')) return openPlate(a.slice(6)); if(numAct(a)) return;
+  if(a==='launch'){ const p=P(); if(S.f.won) return;
+    const miss=[!S.f.plan&&'propellant load',!S.f.synth&&'propellant',!S.f.transfer&&'LOX transfer',!S.f.strut&&'pad legs'].filter(Boolean);
+    if(miss.length){ sfx.buzz(); say(`HALE: <i>"Not yet. Still waiting on: ${miss.join(', ')}."</i>`); return; }
+    const T=val('thr')/100*p.Tmax*1000, tw=T/(p.m0*GM);
+    if(val('thr')<40||tw<1.6){ sfx.alarm(); S.mistakes++; say(`<b>Abort at T+2 s.</b> T/W ${tw.toFixed(2)}: the vehicle barely lifts and gravity losses would eat the margin. HALE shuts the engine down.`,5600); save(); return; }
+    if(tw>1.9){ sfx.alarm(); S.mistakes++; say(`<b>Abort.</b> T/W ${tw.toFixed(2)} at liftoff overstresses the pad legs and the structure. Flight rules say 1.9 maximum.`,5200); save(); return; }
+    const azErr=Math.abs(val('az')-p.az), wErr=Math.abs(val('wait')-p.wait);
+    if(azErr>.5){ sfx.alarm(); S.mistakes++; say(`<b>Plane error ${azErr.toFixed(1)}°.</b> At that azimuth you'd reach orbit tilted away from the orbiter's plane. Correcting it costs about ${fk(2*3500*Math.sin(azErr*Math.PI/360))} m/s you don't carry.`,6400); save(); return; }
+    if(wErr>1){ sfx.alarm(); S.mistakes++; const km=wErr*(2*Math.PI*3740/p.Torb); say(`<b>Phasing error.</b> Launching then puts you ${fk(km)} km from the orbiter at insertion. Your rendezvous fuel covers about 50 km.`,6000); save(); return; }
+    S.f.won=true; save(); launchCine();
+  }
+}};
+function launchCine(){
+  const st=$('#stage'); const d=document.createElement('div'); d.style.cssText='position:absolute;inset:0;z-index:20;background:#000';
+  d.innerHTML=`<svg viewBox="0 0 1600 900" style="width:100%;height:100%"><rect width="1600" height="900" fill="url(#gMars)"/><path d="M0 700 Q600 660 1000 690 T1600 680 V900 H0Z" fill="#6a2c14"/><rect x="700" y="690" width="200" height="20" fill="#3a4448"/>
+  <g id="lcR">${rocket(800,690,1.4,true)}</g><g id="lcDust">${Array.from({length:30},()=>`<circle cx="${800+rnd(-60,60)}" cy="700" r="${rnd(20,50)}" fill="#c87a50" opacity=".6"/>`).join('')}</g>
+  <text id="lcT" x="800" y="120" text-anchor="middle" font-family="Chakra Petch, sans-serif" font-weight="700" font-size="54" fill="#fff">IGNITION</text></svg>`;
+  st.appendChild(d); sfx.alarm(); nz({dur:6,freq:120,q:.4,type:'lowpass',gain:1,attack:.3}); nz({dur:5,freq:400,q:.5,gain:.4,attack:.6});
+  const r=d.querySelector('#lcR'), dust=d.querySelector('#lcDust'), t=d.querySelector('#lcT');
+  r.animate([{transform:'translateY(0)'},{transform:'translateY(-10px)',offset:.15},{transform:'translateY(-1400px)'}],{duration:6000,easing:'cubic-bezier(.6,0,.9,.6)',fill:'forwards'});
+  dust.animate([{opacity:0,transform:'scale(1)'},{opacity:1,transform:'scale(3)'}],{duration:3000,fill:'forwards'});
+  setTimeout(()=>t.textContent='LIFTOFF',1400); setTimeout(()=>t.textContent='MAX-Q',3200); setTimeout(()=>t.textContent='ORBIT INSERTION',5000);
+  setTimeout(()=>{ d.querySelector('svg').innerHTML=`<rect width="1600" height="900" fill="#03060a"/>${Array.from({length:120},()=>`<circle cx="${rnd(0,1600)}" cy="${rnd(0,900)}" r="${rnd(.5,1.8)}" fill="#fff" opacity="${rnd(.3,1).toFixed(2)}"/>`).join('')}<circle cx="800" cy="1500" r="900" fill="url(#gMars)"/><g id="lcO"><rect x="1000" y="380" width="200" height="60" rx="20" fill="#e8ece9"/><rect x="900" y="395" width="100" height="30" fill="#2a5a7a"/><rect x="1200" y="395" width="100" height="30" fill="#2a5a7a"/></g><g id="lcA" transform="translate(300 420) rotate(90)">${rocket(0,0,.6)}</g><text x="800" y="120" text-anchor="middle" font-family="Chakra Petch, sans-serif" font-weight="700" font-size="54" fill="#fff">RENDEZVOUS</text>`;
+    d.querySelector('#lcA').animate([{transform:'translate(300px,420px) rotate(90deg)'},{transform:'translate(880px,410px) rotate(90deg)'}],{duration:4000,easing:'ease-out',fill:'forwards'}); },6200);
+  setTimeout(()=>{ sfx.success(); sfx.clunk(); d.querySelector('text').textContent='DOCKED'; },10400);
+  setTimeout(()=>{ showWin(); },12000);
+}
+/* ============================== MANUAL ============================== */
+function sandbox(box,id,fn){ const root=box.querySelector('#'+id); if(!root) return; const run=()=>{ const v={}; root.querySelectorAll('input').forEach(i=>v[i.name]=+i.value); root.querySelectorAll('[data-show]').forEach(s=>s.textContent=v[s.dataset.show]); root.querySelector('.out').innerHTML=fn(v); }; root.querySelectorAll('input').forEach(i=>i.oninput=run); run(); }
+const rng=(name,min,max,step,val,label)=>`<label style="display:block;margin:.35rem 0">${label}: <b data-show="${name}"></b><br><input type="range" name="${name}" min="${min}" max="${max}" step="${step}" value="${val}" style="width:100%"></label>`;
+const T=s=>`<span style="font-family:var(--tape)">${s}</span>`;
+const MAN=[
+ {t:'Rocket equation',h:`<h3>Δv and propellant</h3><p>The Tsiolkovsky rocket equation: ${T('Δv = Isp × g₀ × ln(m₀ ÷ m<sub>f</sub>)')}. m₀ is the fuelled mass, m<sub>f</sub> the dry mass.</p><p><b>g₀ is always 9.80665 m/s², even on Mars.</b> It isn't the local gravity; it's the constant used to define Isp in seconds.</p><p>Rearranged: mass ratio ${T('MR = e^(Δv ÷ (Isp × g₀))')}, propellant ${T('m<sub>p</sub> = m<sub>dry</sub> × (MR − 1)')}.</p><p><i>Worked example:</i> Isp 330 s, Δv 3,500 m/s, dry 1,000 kg. Isp × g₀ = 3,236 m/s. MR = e^(1.0815) = 2.949. Propellant = 1,000 × 1.949 = 1,949 kg.</p><div id="sb1" class="paper" style="margin-top:.6rem">${rng('isp',300,400,5,350,'Isp (s)')}${rng('dv',2000,5000,50,3800,'Δv (m/s)')}${rng('dry',500,3000,50,1500,'Dry mass (kg)')}<div class="out"></div></div>`,sb:['sb1',v=>{ const mr=Math.exp(v.dv/(v.isp*9.80665)); return `Mass ratio ${mr.toFixed(3)}. Propellant <b>${fk(v.dry*(mr-1))} kg</b>.`; }]},
+ {t:'Propellant chemistry',h:`<h3>Methalox from Mars air</h3><p>Combustion: ${T('CH₄ + 2 O₂ → CO₂ + 2 H₂O')}. Stoichiometric O/F by mass is 64 ÷ 16 ≈ 4.0, but engines run fuel-rich (around 3.2 to 3.6) to keep the chamber cooler.</p><p>Split the propellant: fuel = m<sub>p</sub> ÷ (1 + O/F); oxidiser = the rest.</p><p><b>Sabatier:</b> ${T('CO₂ + 4 H₂ → CH₄ + 2 H₂O')}. Per mole of CH₄: 1 mol CO₂ and 4 mol H₂. The 2 mol of water can be split again (2 H₂O → 2 H₂ + O₂), giving back 2 mol H₂. With recycling, net H₂ is 2 mol per mol CH₄.</p><p><b>MOXIE:</b> ${T('2 CO₂ → 2 CO + O₂')}: 2 mol CO₂ per mol O₂.</p><p><i>Worked example:</i> 100 kg at O/F 3.0 → 25 kg CH₄ = 1.558 kmol. Sabatier CO₂ = 1.558 × 44.009 = 68.6 kg. H₂ = 4 × 1.558 × 2.016 = 12.57 kg (6.28 kg with recycling). O₂ 75 kg = 2.344 kmol → MOXIE CO₂ = 2 × 2.344 × 44.009 = 206.3 kg.</p><p>Molar masses: CH₄ 16.043, O₂ 31.998, CO₂ 44.009, H₂ 2.016 g/mol (= kg/kmol).</p>`},
+ {t:'Fluid dynamics',h:`<h3>Continuity, Bernoulli, cavitation</h3><p><b>Continuity:</b> volume flow is the same everywhere in a pipe: ${T('Q = A × v')}. A narrower pipe means faster liquid.</p><p><b>Bernoulli</b> (no losses): ${T('p + ½ρv² + ρgh')} is constant along the flow. Speeding up or climbing both cost pressure: ${T('p₂ = p₁ − ½ρ(v₂² − v₁²) − ρ g h')}.</p><p><b>Cavitation:</b> if pressure falls below the liquid's vapour pressure, it boils into bubbles. Bubbles choke the flow and damage pumps.</p><p>Units: L/s ÷ 1000 = m³/s. Pa ÷ 1000 = kPa. On Mars, g = 3.71.</p><p><i>Worked example:</i> water (ρ 1,000), 2 L/s, 50 mm pipe → 20 mm throat 3 m higher, on Earth. v₁ = 1.02 m/s, v₂ = 6.37 m/s. Drop = ½ × 1,000 × (40.6 − 1.04) + 1,000 × 9.81 × 3 = 19.8 + 29.4 = 49.2 kPa.</p><div id="sb3" class="paper" style="margin-top:.6rem">${rng('q',.5,5,.1,2,'Flow (L/s)')}${rng('d',10,40,1,20,'Throat bore (mm)')}<div class="out"></div></div>`,sb:['sb3',v=>{ const v1=v.q/1000/(Math.PI*.025**2), v2=v.q/1000/(Math.PI*(v.d/2000)**2); return `Water in a 50 mm pipe: v₁ ${v1.toFixed(2)} m/s, throat v₂ ${v2.toFixed(2)} m/s. Pressure drop from speed alone: <b>${(.5*1000*(v2*v2-v1*v1)/1000).toFixed(1)} kPa</b>.`; }]},
+ {t:'Structures',h:`<h3>Stress, yield and buckling</h3><p>Axial stress ${T('σ = F ÷ A')}. The bar yields (squashes permanently) when σ reaches the material's yield strength σy.</p><p>A long, slender bar in compression can fail at a much lower load by <b>buckling</b> sideways. Euler's load for a bar pinned at both ends: ${T('P<sub>cr</sub> = π² E I ÷ L²')}. For a square bar of side a: ${T('I = a⁴ ÷ 12')}.</p><p>A <b>factor of safety</b> of 2.5 means the design must survive 2.5 × the working load, on both checks.</p><p><i>Worked example:</i> 4 kN working load, 10 mm square aluminium (E 69 GPa, σy 276 MPa), 0.5 m long. Proof load 10 kN. Stress = 10,000 ÷ 0.0001 = 100 MPa: fine. I = 8.33 × 10⁻¹⁰ m⁴; P<sub>cr</sub> = 9.87 × 69×10⁹ × 8.33×10⁻¹⁰ ÷ 0.25 = 2,269 N. It buckles at a fifth of the proof load.</p><div id="sb4" class="paper" style="margin-top:.6rem">${rng('a',4,30,1,10,'Side a (mm)')}${rng('L',.2,2,.05,.5,'Length L (m)')}${rng('E',60,220,1,69,'E (GPa)')}<div class="out"></div></div>`,sb:['sb4',v=>`Euler buckling load <b>${fk(Math.PI**2*v.E*1e9*(v.a/1000)**4/12/v.L**2)} N</b>. Area ${v.a*v.a} mm².`]},
+ {t:'Thrust',h:`<h3>Thrust-to-weight</h3><p>${T('T/W = thrust ÷ (m₀ × g<sub>local</sub>)')}. Below 1 the rocket can't leave the pad. Just above 1 it climbs slowly and wastes propellant fighting gravity. Too high overloads the structure and crew.</p><p>Throttle % = required thrust ÷ max thrust × 100.</p><p><i>Worked example:</i> 4,000 kg on Mars, T/W 1.6 needs 1.6 × 4,000 × 3.71 = 23.7 kN. With a 40 kN engine, throttle at least 59.4 %, so 60 %.</p>`},
+ {t:'Orbits',h:`<h3>Launch azimuth and phasing</h3><p>To launch straight into an orbit of inclination i from latitude φ, fly the azimuth ${T('sin(Az) = cos(i) ÷ cos(φ)')}, measured from north toward east. It only works if i ≥ φ.</p><p><b>Phasing:</b> the orbiter moves ${T('ω = 360° ÷ period')} per minute. You must launch so that when you reach the insertion point, the orbiter is there too.</p><p>Where must the orbiter be at liftoff? At the insertion angle minus how far it travels during your ascent: ${T('φ<sub>launch</sub> = θ<sub>insertion</sub> − ω × t<sub>ascent</sub>')} (negative means behind the pad). Then wait until it gets there: ${T('t<sub>wait</sub> = (φ<sub>launch</sub> − φ<sub>now</sub>) ÷ ω')}, adding 360° if the angle comes out negative.</p><p><i>Worked example:</i> φ 10°, i 30°: sin(Az) = 0.866 ÷ 0.985 = 0.879, Az = 61.6°. Period 100 min (ω 3.6°/min), ascent 10 min to 20° downrange, orbiter now 90° past: φ<sub>launch</sub> = 20 − 36 = −16°. (−16 − 90) = −106° → +254°. Wait 254 ÷ 3.6 = 70.6 min.</p>`},
+];
+function openManual(start=0){ let p=start; const draw=(box,turn)=>{ const pg=box.querySelector('.page'); pg.innerHTML=MAN[p].h+`<span class="pno">${p+1} / ${MAN.length}</span>`; if(turn){ pg.classList.remove('turn'); void pg.offsetWidth; pg.classList.add('turn'); } box.querySelectorAll('#mnTabs button').forEach((b,i)=>b.classList.toggle('ghost',i!==p)); if(MAN[p].sb) sandbox(box,MAN[p].sb[0],MAN[p].sb[1]); };
+  modal('HALE engineering manual, part 2',`<div id="mnTabs" class="mbtns" style="margin:0 0 .7rem">${MAN.map((m,i)=>`<button class="mbtn ghost" data-i="${i}" style="padding:.25rem .6rem;font-size:.9rem">${m.t}</button>`).join('')}</div><div class="book"><div class="page" style="width:min(44rem,88vw)"></div></div>`,box=>{ draw(box); box.querySelectorAll('#mnTabs button').forEach(b=>b.onclick=()=>{ p=+b.dataset.i; sfx.page(); draw(box,1); }); }); }
+function examine(){}
+
+/* ============================== HINTS ============================== */
+function objective(){ const f=S.f, p=P();
+  if(!f.plan) return {k:'plan',g:'Size the propellant load.',h:['Read the mission, engine and vehicle plates in the planner. The Rocket equation chapter shows the method.','Mass ratio = e^(Δv ÷ (Isp × 9.80665)). Use 9.80665, not Mars gravity. Propellant = dry mass × (ratio − 1).',`e^(${fk(p.dv)} ÷ (${p.isp} × 9.80665)) = ${p.MR.toFixed(4)}. Propellant = ${fk(p.mdry)} × ${(p.MR-1).toFixed(4)} = ${fk(p.mp)} kg.`]};
+  if(!f.synth) return {k:'synth',g:'Make the methane and oxygen.',h:['Split the propellant by the mixture ratio into fuel and oxidiser, then convert each to kilomoles. The Propellant chemistry chapter has every ratio you need.',`Fuel = ${fk(p.mp)} ÷ ${(1+p.OF).toFixed(1)}. Sabatier needs 1 kmol CO₂ and 4 kmol H₂ per kmol CH₄ (2 with recycling). MOXIE needs 2 kmol CO₂ per kmol O₂. Compare the H₂ you need with the ${fk(p.h2Stock)} kg in storage.`,`CH₄ ${fk(p.mf)} kg = ${p.nCH4.toFixed(2)} kmol → CO₂ ${fk(p.co2Sab)} kg. O₂ ${fk(p.mo)} kg = ${p.nO2.toFixed(2)} kmol → MOXIE CO₂ ${fk(p.co2Mox)} kg. H₂ without recycling ${fk(p.h2No)} kg exceeds storage, so switch recycling on and draw ${fk(p.h2Rec)} kg.`]};
+  if(!f.transfer) return {k:'transfer',g:'Transfer the liquid oxygen to the vehicle.',h:['Two limits: flow must be fast enough for the window, and the pressure in the damaged section must stay above LOX\'s vapour pressure. The Fluid dynamics chapter covers both.',`Minimum flow = (${fk(p.mo)} ÷ ${p.rho} m³ × 1000) ÷ (${p.twin} × 60) L/s. Then pump pressure ≥ ${p.pv} + ½ρ(v₂² − v₁²) + ρ × 3.71 × ${p.h} (in kPa). Higher flow needs more pressure, so don't overshoot.`,`Flow ≥ ${p.Qreq.toFixed(2)} L/s. At ${(Math.ceil(p.Qreq*100)/100).toFixed(2)} L/s you need at least ${Math.ceil(p1min(p,Math.ceil(p.Qreq*100)/100))} kPa (pump max ${p.pmax}).`]};
+  if(!f.strut) return {k:'strut',g:'Choose a pad-leg strut that passes proof test.',h:['Each strut takes a quarter of the fuelled vehicle\'s Mars weight times 1.5, and must survive 2.5 times that. Check both yield and buckling. The Structures chapter has the formulas.',`Working load = (${fk(p.mdry)} + ${fk(p.mp)}) × 3.71 ÷ 4 × 1.5 = ${fk(p.Fs)} N. Proof load = ${fk(p.Fs*FOS)} N. Check σ = F ÷ a² and P<sub>cr</sub> = π²E(a⁴/12) ÷ ${p.L.toFixed(2)}² for each bar.`,`Bars that pass: ${p.bars.map((b,i)=>p.barRes[i].yieldOK&&p.barRes[i].buckOK?`${MAT[b.m].n} □${b.a} mm`:null).filter(Boolean).join(', ')}.`]};
+  if(!f.won) return {k:'launch',g:'Launch and catch the orbiter.',h:['Three settings in the cockpit: throttle (T/W), azimuth and the hold time. The Thrust and Orbits chapters cover them.',`Thrust needed for T/W 1.6: 1.6 × ${fk(p.m0)} × 3.71 N. Azimuth: sin(Az) = cos(${p.inc}°) ÷ cos(${LAT}°). Phasing: ω = 360 ÷ ${p.Torb}; target = ${p.thdr} − ω × ${p.tasc}; wait = (target − ${p.phi0}) ÷ ω, adding 360° if negative.`,`Throttle ${p.thrLo}–${p.thrHi} %. Azimuth ${p.az.toFixed(1)}°. Hold ${p.wait.toFixed(1)} min.`]};
+  return {k:'done',g:'You made it.',h:[]};
+}
+function openHints(){ const o=objective(); const n=S.tier[o.k]||0; modal('Hints',`<div class="goal">${o.g}</div>${o.h.slice(0,n).map((t,i)=>`<div class="hint"><b>Hint ${i+1}.</b> ${t}</div>`).join('')}${n<o.h.length?`<div class="mbtns"><button class="mbtn" id="hNext">${n===0?'Show a hint':n===o.h.length-1?'Show the answer':'Show another hint'}</button></div>`:''}`,box=>{ const b=box.querySelector('#hNext'); if(b) b.onclick=()=>{ S.tier[o.k]=n+1; S.hints++; $('#hintN').textContent=S.hints; save(); closeModal(); openHints(); }; }); }
+function openJournal(){ const o=objective(); modal('Journal',`<div class="goal">Current aim: ${o.g}</div>${S.journal.length?`<ol class="jlist">${S.journal.map(j=>`<li>${esc(j)}</li>`).join('')}</ol>`:'<p class="mtext">Nothing noted yet.</p>'}`); }
+function openMenu(){ modal('Menu',`<p class="mtext">Progress saves automatically. Every new game has new numbers.</p><div class="mbtns"><button class="mbtn" id="mnRes">Resume</button><button class="mbtn ghost" id="mnRestart">New game (new numbers)</button></div>`,box=>{ box.querySelector('#mnRes').onclick=closeModal; box.querySelector('#mnRestart').onclick=()=>{ const b=box.querySelector('#mnRestart'); if(b.dataset.c){ wipe(); location.reload(); } else { b.dataset.c=1; b.textContent='Click again to erase your progress'; } }; }); }
+$('#bHint').onclick=()=>{ audioInit(); openHints(); }; $('#bJournal').onclick=()=>{ audioInit(); openJournal(); }; $('#bManual').onclick=()=>{ audioInit(); openManual(); }; $('#bMenu').onclick=()=>{ audioInit(); openMenu(); }; $('#bSound').onclick=()=>{ audioInit(); setSound(!A.on); };
+function showWin(){ const p=P(); $('#winText').textContent=`Docked with the orbiter after the longest day of your life. The crew pull you through the hatch. HALE's last message from the surface: "Every number was yours. Well flown."`; $('#winStats').innerHTML=`<span class="stat"><b>${fmtT(S.t)}</b>time</span><span class="stat"><b>${S.hints}</b>hints</span><span class="stat"><b>${S.mistakes}</b>failed attempts</span>`; $('#win').classList.add('on'); }
+$('#bAgain').onclick=()=>{ wipe(); location.reload(); }; $('#bStay').onclick=()=>$('#win').classList.remove('on');
+
+/* ============================== INIT ============================== */
+function grain(){ const c=$('#grain'); c.width=320; c.height=180; const x=c.getContext('2d'); const d=x.createImageData(320,180); for(let i=0;i<d.data.length;i+=4){ const v=Math.random()*255; d.data[i]=d.data[i+1]=d.data[i+2]=v; d.data[i+3]=255; } x.putImageData(d,0,0); c.style.width='100%'; c.style.height='100%'; }
+function start(){ audioInit(); $('#intro').classList.remove('on'); S.started=true; S.sel=null; if(!S.seed) S.seed=(Math.random()*2**31)|0; P(); renderInv(); $('#hintN').textContent=S.hints;
+  const el=L('L0'); cur='L0'; L('L1').classList.add('hidden'); mount(el,S.scene); el.classList.remove('hidden'); $('#back').style.display=scenes[S.scene].parent?'block':'none';
+  if(S.t<5) setTimeout(()=>say('HALE: <i>"Propellant bay is open. Everything from here goes into the ascent vehicle on the pad."</i>',5200),900); save(); if(S.f.won) showWin(); }
+setInterval(()=>{ if(!S.started||S.f.won||document.hidden) return; S.t++; $('#timer').textContent=fmtT(S.t); if(S.t%10===0) save(); },1000);
+grain(); if(location.hash==='#qa') window.__qa={P:()=>P(),S:()=>S};
+const saved=load(); if(saved&&saved.started){ $('#bContinue').style.display=''; $('#bContinue').onclick=()=>{ S=saved; S.sel=null; start(); }; }
+$('#bBegin').onclick=()=>{ S=fresh(); start(); };
+})();
+</script>
+</body>
+</html>
